@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Compilaciones y pruebas
+dist/
+build/
+coverage/
+.next/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

@@ -1,0 +1,133 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// SUCURSALES Y UBICACIONES
+
+model Branch {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouses Warehouse[]
+
+  @@map("branches")
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  code      String
+  name      String
+  active    Boolean  @default(true)
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch Branch  @relation(fields: [branchId], references: [id])
+  aisles Aisle[]
+
+  @@unique([branchId, code])
+  @@map("warehouses")
+}
+
+model Aisle {
+  id          String    @id @default(cuid())
+  number      Int
+  active      Boolean   @default(true)
+  warehouseId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  racks Rack[]
+
+  @@unique([warehouseId, number])
+  @@map("aisles")
+}
+
+model Rack {
+  id        String   @id @default(cuid())
+  number    Int
+  active    Boolean  @default(true)
+  aisleId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aisle Aisle @relation(fields: [aisleId], references: [id])
+
+  @@unique([aisleId, number])
+  @@map("racks")
+}
+
+// CATÁLOGO DE PRODUCTOS
+
+model ProductFamily {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  references Reference[]
+
+  @@map("product_families")
+}
+
+model Reference {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  familyId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  family ProductFamily? @relation(fields: [familyId], references: [id])
+
+  products Product[]
+
+  @@index([familyId])
+  @@map("references")
+}
+
+model Finish {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@map("finishes")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  referenceId String
+  finishId    String
+  lengthMm    Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reference Reference @relation(fields: [referenceId], references: [id])
+  finish    Finish    @relation(fields: [finishId], references: [id])
+
+  @@unique([referenceId, finishId, lengthMm])
+  @@index([finishId])
+  @@map("products")
+}

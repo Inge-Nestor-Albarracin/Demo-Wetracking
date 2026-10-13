@@ -392,8 +392,11 @@ describe('Inventory bundles (e2e)', () => {
 
   it('looks up by exact EPC and by ID without creating inventory', async () => {
     const value = epc('ENTRY');
-    const before = await prisma.bundle.count();
-    const movementsBefore = await prisma.inventoryMovement.count();
+    // Scoped to this run: other e2e files may create bundles in parallel.
+    const ownBundles = { referenceId: { in: created.references } };
+    const ownMovements = { bundle: ownBundles };
+    const before = await prisma.bundle.count({ where: ownBundles });
+    const movementsBefore = await prisma.inventoryMovement.count({ where: ownMovements });
 
     const byEpc = await http()
       .get(`/inventory/bundles/epc/${value.toLowerCase()}`)
@@ -429,7 +432,7 @@ describe('Inventory bundles (e2e)', () => {
       .set(headers.READ_ONLY)
       .expect(404);
 
-    expect(await prisma.bundle.count()).toBe(before);
-    expect(await prisma.inventoryMovement.count()).toBe(movementsBefore);
+    expect(await prisma.bundle.count({ where: ownBundles })).toBe(before);
+    expect(await prisma.inventoryMovement.count({ where: ownMovements })).toBe(movementsBefore);
   });
 });

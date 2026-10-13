@@ -48,6 +48,12 @@ equipo. El proyecto local completo no fue inspeccionado desde ChatGPT.
 | POST | /inventory/bundles | Registrar paquete + movimiento inicial (ADMIN, WAREHOUSE) |
 | GET | /inventory/bundles/epc/:epc | Consulta exacta por EPC |
 | GET | /inventory/bundles/:id | Detalle de paquete |
+| GET | /inventory/bundles | Listado paginado con filtros |
+| GET | /inventory/summary | Resumen por referencia/acabado con ubicaciones |
+| GET | /inventory/bundles/:id/movements | Historial paginado |
+| POST | /inventory/bundles/:id/exit | Salida (ADMIN, WAREHOUSE) |
+| POST | /inventory/bundles/:id/transfer | Traslado del paquete completo (ADMIN, WAREHOUSE) |
+| POST | /inventory/bundles/:id/adjustments | Ajuste con motivo (ADMIN) |
 | GET/POST | /locations/branches | Sucursales |
 | GET | /locations/branches/:branchId/inventory-locations | Bodegas/almacenes |
 | POST | /locations/inventory-locations | Crear bodega/almacén |
@@ -241,27 +247,230 @@ tiene 0 paquetes y 0 movimientos reales (no se tocó ningún dato real).
 - Confirmar con el lector UHF real el formato que entrega (hex, separadores).
 - Confirmar si un registro sin burro (p. ej. almacén minorista) debe permitirse;
   hoy rackId es obligatorio en el endpoint aunque la columna admite null.
-- Idempotencia por clave del cliente: hoy el EPC único evita duplicar el
-  registro; las operaciones futuras (salidas, traslados, ajustes) necesitarán
-  operationKey enviado por el cliente para reintentos seguros.
+- Idempotencia por clave del cliente: resuelta en el bloque siguiente para
+  salidas, traslados y ajustes.
 - Roles autorizados a crear referencias desde bodega: sigue sin confirmar.
+
+## Bloque completado: inventario fase 1 + frontend (13/10/2026)
+
+Sin migraciones nuevas: el contrato de reintentos usa la columna única
+`inventory_movements.operationKey` existente y los campos ya guardados en el
+movimiento. Sin cambios en schema.prisma ni en migraciones aplicadas.
+
+### Etapa 1 — estado al iniciar
+- La carpeta ya es un repositorio Git (rama main, remoto origin en GitHub),
+  árbol limpio salvo `tsconfig.build.tsbuildinfo` que cambia en cada build.
+- build OK, lint OK, unit 1/1, e2e 17/17, `migrate status` al día. El e2e
+  antiguo ya respetaba la autenticación (corregido en la tarea anterior).
+- Observación de higiene (no modificada): no hay `.gitignore` en la raíz y
+  el repositorio versiona `node_modules/` (~80.000 archivos), incluido
+  `node_modules/.pnpm/node_modules/api` y `/web`, que son enlaces a `apps/api`
+  y `apps/web` y aparecen duplicados en `git status`. `.env` NO está versionado
+  y hoy queda ignorado también en la ruta enlazada. Recomendado: añadir
+  `.gitignore` raíz con `node_modules/` y ejecutar
+  `git rm -r --cached node_modules apps/api/node_modules apps/web/node_modules`
+  en un commit aparte, decidido por el desarrollador.
+
+### Etapa 2–3 — consultas
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| GET | /inventory/bundles | Autenticado |
+| GET | /inventory/summary | Autenticado |
+| GET | /inventory/bundles/:id/movements | Autenticado |
+
+- `GET /inventory/bundles`: filtros familyId, referenceId, finishId, branchId,
+  inventoryLocationId, aisleId, rackId, `available=true|false`; `page` (≥1) y
+  `pageSize` (1–100, por defecto 25). Orden estable createdAt desc, id desc.
+  Respuesta `{ items, page, pageSize, total, totalPages }`; los items no
+  incluyen movimientos. ID de filtro inexistente → 404; query inválida o
+  parámetro desconocido → 400.
+- `GET /inventory/summary`: agrupa por referencia + acabado con `groupBy`
+  sobre bundles actuales con quantity > 0 (los agotados no suman perfiles ni
+  paquetes). Cada grupo: perfiles, paquetes y `locations[]` por
+  ubicación/pasillo/burro. Filtros familyId, referenceId, finishId, branchId,
+  inventoryLocationId. Orden por código de referencia y de acabado; desglose
+  por sucursal, bodega, pasillo y burro. Paginado por grupo; `totals` describe
+  todo el resultado filtrado. No existe tabla de stock aparte.
+- `GET /inventory/bundles/:id/movements`: historial paginado, más reciente
+  primero (occurredAt, createdAt, id desc), con origen/destino legibles.
+- Datos de usuario expuestos: solo id, nombre y rol (`performedBy`). Ninguna
+  respuesta incluye email, passwordHash ni hashes (probado).
+
+### Etapa 4 — operaciones
+| Método | Ruta | Permiso | Body |
+| --- | --- | --- | --- |
+| POST | /inventory/bundles/:id/exit | ADMIN, WAREHOUSE | operationKey, quantity, reason? |
+| POST | /inventory/bundles/:id/transfer | ADMIN, WAREHOUSE | operationKey, inventoryLocationId, rackId, reason? |
+| POST | /inventory/bundles/:id/adjustments | ADMIN | operationKey, type (ADJUSTMENT_IN/OUT), quantity, reason |
+
+No hay PATCH genérico de quantity/ubicación. Respuesta:
+`{ replayed, movement, bundle }`; 201 si se aplicó, 200 si fue un reintento.
+
+- Salida: entero 1..saldo; saldo insuficiente o agotado → 409. Movimiento EXIT
+  con origen = ubicación/burro actual.
+- Traslado: paquete completo; cantidad sin cambio (movimiento TRANSFER con
+  quantity = before = after); destino activo (ubicación, sucursal, pasillo,
+  burro) y burro perteneciente a la ubicación → si no, 400/404; mismo burro de
+  la misma ubicación → 400; paquete agotado → 409. Se permite cambiar de burro
+  dentro de la misma bodega.
+- Ajuste: solo ADMIN; motivo obligatorio (no vacío tras trim); OUT nunca deja
+  saldo negativo (409). WAREHOUSE → 403.
+- Concurrencia: cada operación es una transacción interactiva que primero
+  ejecuta `SELECT id FROM bundles WHERE id = $1 FOR UPDATE`. PostgreSQL
+  serializa las operaciones del mismo paquete; el saldo se lee después de
+  obtener el bloqueo (READ COMMITTED ve el último valor confirmado). Los CHECK
+  de saldos siguen como última defensa. Probado: 8 salidas simultáneas de 3
+  sobre 10 perfiles → 3 aplicadas, 5 rechazadas (409), saldo final 1, saldos
+  encadenados 10→7→4→1.
+- Contrato de reintentos (`operationKey`): UUID generado por el cliente, uno
+  por operación intencionada; se normaliza a minúsculas.
+  - Misma clave + mismo paquete + mismo usuario + datos equivalentes (tipo,
+    cantidad, motivo; en traslado, destino) → 200 `replayed: true` con el
+    movimiento original; no cambia el stock.
+  - Misma clave con otros datos, otra operación, otro paquete u otro usuario
+    → 409 "La clave de operación ya se usó con otros datos".
+  - La clave se consulta tras el bloqueo; duplicados simultáneos sobre otro
+    paquete los detiene el índice único (P2002) y se resuelven igual.
+  - Si la operación falla (4xx/5xx) no se consume la clave: no queda
+    movimiento. El frontend conserva la clave ante errores de red/5xx para que
+    el reintento sea seguro, y la descarta si cambian los datos.
+  - Las claves de registro de paquetes usan el prefijo `bundle-registration:`
+    y no pueden colisionar con UUIDs de cliente.
+
+### Etapa 5 — frontend (apps/web)
+Sin dependencias nuevas (React 19 + Vite 8 de la plantilla). Navegación por
+estado, sin router.
+- Login con `/auth/login`; usuario y rol en cabecera; cierre de sesión local.
+- Token solo en memoria (contexto React): recargar la página pide login de
+  nuevo. Se cierra la sesión al vencer `expires_in` o ante cualquier 401
+  (usuario desactivado, token inválido) con aviso en español.
+- `VITE_API_URL` (por defecto http://localhost:3000); `apps/web/.env.example`
+  sin secretos. Vite fijo en puerto 5173 (`strictPort`).
+- CORS en el API (`configureApp`): solo orígenes de `CORS_ORIGIN` (por defecto
+  http://localhost:5173), métodos GET/POST/PATCH, cabeceras Authorization y
+  Content-Type, sin cookies. Probado: origen permitido recibe la cabecera,
+  otro origen no.
+- Vistas: Registrar paquete (ADMIN/WAREHOUSE), Consultar EPC, Paquetes
+  (filtros + paginación), Resumen (familia, sucursal, bodega + desglose),
+  Detalle (datos, historial paginado y operaciones según rol).
+- Registro: tipo inventario existente/entrada nueva; familia filtra
+  referencias; referencia y acabado por separado; perfiles enteros; llegada
+  exacta/mes-año/desconocida (botón "Hoy", sin fecha inventada); selectores
+  dependientes sucursal → bodega → pasillo → burro que limpian los niveles
+  inferiores; EPC como texto en mayúsculas conservando ceros; tras guardar se
+  limpian EPC/cantidad/notas y se conservan producto y ubicación.
+- Operaciones con paso de confirmación visible (saldo antes → después,
+  destino legible); botones deshabilitados mientras se procesa; acciones
+  ocultas si el rol no las permite (el API sigue autorizando).
+- Nota: los mensajes de validación por defecto de class-validator (p. ej.
+  "must not be greater than") pueden llegar en inglés; el frontend valida
+  antes los casos comunes en español.
+
+### Archivos de este bloque
+API (`apps/api`):
+- Nuevos: `src/modules/inventory/inventory.shared.ts`,
+  `inventory-queries.service.ts`, `inventory-operations.service.ts`,
+  `dto/inventory-query.dto.ts`, `dto/bundle-operation.dto.ts`,
+  `test/inventory-queries.e2e-spec.ts`, `test/inventory-operations.e2e-spec.ts`,
+  `test/support/inventory-fixtures.ts`, `.env.example`.
+- Modificados: `src/app.setup.ts` (CORS), `inventory.controller.ts`,
+  `inventory.module.ts`, `inventory.service.ts` (usa inventory.shared),
+  `test/inventory-bundles.e2e-spec.ts` (conteos acotados a su corrida para
+  poder ejecutarse en paralelo con otros archivos).
+Web (`apps/web`):
+- Nuevos: `.env.example`, `src/vite-env.d.ts`, `src/api/{client,types}.ts`,
+  `src/session/{session-context.ts,SessionProvider.tsx}`,
+  `src/lib/{useLoad,format,forms}.ts`,
+  `src/components/{ui,CatalogSelectors,LocationSelectors,ArrivalFields,OperationsPanel}.tsx`,
+  `src/views/{navigation.ts,LoginView,RegisterBundleView,LookupView,BundlesView,SummaryView,BundleDetailView}.tsx`.
+- Reemplazados: `src/App.tsx`, `src/App.css`, `src/index.css`, `src/main.tsx`,
+  `index.html` (lang es, título), `vite.config.ts` (puerto fijo).
+Raíz: `.claude/launch.json` (arranque de api y web para el panel de vista previa).
+
+### Comandos y resultados
+- apps/api: `pnpm build` OK; `pnpm lint` OK (0 avisos); `pnpm test` 1/1;
+  `pnpm exec vitest run --config ./vitest.config.e2e.ts` → 5 archivos, 31/31
+  (app 2, familias 7, paquetes 8, consultas 6, operaciones 8). Las pruebas de
+  concurrencia y reintentos se repitieron 3 veces más: 3/3 OK.
+- apps/web: `pnpm build` OK (tsc + vite); `pnpm lint` OK (0 avisos).
+- `prisma migrate status`: "Database schema is up to date".
+- Aviso conocido: `DeprecationWarning` de `pg` con `$transaction` interactivo
+  (adapter-pg 7.8.0); no es un fallo.
+
+### Verificación real en navegador (panel integrado, API + Vite locales)
+Con usuarios y datos temporales `E2E-UI-*` creados por un script provisional:
+- WAREHOUSE: login → registro INITIAL_STOCK (mes/año, EPC con ceros iniciales
+  escrito en minúsculas → guardado en mayúsculas) → mismo EPC otra vez →
+  "Ya existe un paquete con ese EPC" → consulta por EPC → detalle → salida de 4
+  con confirmación (10 → 6) → historial actualizado → traslado (mismo burro
+  bloqueado con aviso; burro 8 confirmado, total sin cambio) → listado y
+  resumen con desglose.
+- READ_ONLY: sin pestaña de registro; detalle sin formularios; EPC inexistente
+  sin enlace de registro. Al desactivar el usuario en BD, la siguiente
+  solicitud devolvió al login con "Tu sesión venció o ya no está habilitada".
+- ADMIN: pestaña Ajuste visible; sin motivo el botón queda deshabilitado;
+  ajuste +2 confirmado (6 → 8).
+- Diseño revisado en 768×1024 (tablet). Consola: solo los 409/404/401
+  provocados a propósito.
+- No probado en navegador: vencimiento real de una hora del token (cubierto
+  por temporizador en código), modo oscuro, lector Bluetooth físico.
+
+### Arranque local
+1. PostgreSQL local en marcha y `apps/api/.env` configurado (ver
+   `apps/api/.env.example`; no copiar valores reales a documentos).
+2. API: `pnpm --dir apps/api start:dev` (puerto 3000).
+3. Web: copiar `apps/web/.env.example` a `apps/web/.env.local` si el API no
+   está en http://localhost:3000; luego `pnpm --dir apps/web dev`
+   (http://localhost:5173). Si se cambia el puerto/origen del frontend,
+   ajustar `CORS_ORIGIN` en `apps/api/.env`.
+4. Desde la raíz también existen `pnpm dev:api` y `pnpm dev:web`.
+
+### Prueba manual breve
+1. Ingresar con un usuario ADMIN o WAREHOUSE existente.
+2. Registrar paquete: Inventario existente, referencia, acabado, 10 perfiles,
+   llegada "Solo mes y año", sucursal/bodega/pasillo/burro, EPC de prueba.
+3. Repetir el mismo EPC → debe mostrar "Ya existe un paquete con ese EPC".
+4. Consultar EPC → detalle con 10 perfiles y un movimiento inicial.
+5. Salida de 4 → confirmar → saldo 6 y nueva fila "Salida" en el historial.
+6. Resumen → la referencia/acabado muestra 6 perfiles y su burro.
+7. Con un usuario READ_ONLY: no aparece Registrar ni formularios de operación.
+8. Limpiar los registros de prueba creados (paquete y movimientos) por ID.
+
+### Datos de prueba y limpieza
+- e2e: cada archivo crea usuarios `@test.local` y catálogo/ubicaciones
+  `E2E-*-<sufijo>` y borra por IDs exactos (paquetes por sus referencias de
+  prueba).
+- Navegador: 3 usuarios `ui-*@test.local`, familia/referencia/acabado/
+  sucursal/bodega/pasillo/2 burros `E2E-UI-*-E3C5A8`, 1 paquete y 4
+  movimientos; credenciales en un archivo local ignorado por Git. Limpieza por
+  IDs exactos: 4 movimientos, 1 paquete, 2 burros, 1 pasillo, 1 bodega,
+  1 sucursal, 1 referencia, 1 acabado, 1 familia, 3 usuarios; archivo de
+  credenciales y script provisional eliminados.
+- Comprobado al final: 0 usuarios @test.local, 0 registros `E2E-*`,
+  0 paquetes y 0 movimientos en la BD local.
+- Datos previos del desarrollador vistos en la BD local y NO tocados:
+  referencia TEST-173 (inactiva), acabado TEST-COLOR (inactivo), sucursal
+  "Sucursal de prueba" (TEST-C7923B31). Los IDs de los acabados reales son
+  UUID (no CUID), cargados por SQL anteriormente.
 
 ## Pendiente
 
-1. ~~Familias: endpoints y asociación/filtro de referencias~~ (hecho 13/10/2026).
-   Pendiente de negocio: cargar familias reales y qué roles crean referencias
-   desde bodega.
-2. ~~Bundle: registro transaccional con movimiento inicial y usuario de sesión~~
-   (hecho 13/10/2026).
-3. EPC: ~~consulta exacta y duplicados~~ (hecho). Pendiente: idempotencia por
-   clave enviada por el cliente para reintentos de salidas/traslados/ajustes.
-4. Resúmenes de inventario por referencia/acabado/ubicación (próxima tarea,
-   ver docs/next-task.md).
-5. Frontend funcional de registro y consulta.
-6. Salidas, traslados y ajustes con validación y concurrencia.
-7. Empresas/contactos, cotizador, orden y relación con despacho.
+1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean
+   referencias desde bodega.
+2. ~~Registro de paquetes con movimiento inicial~~ (hecho).
+3. ~~EPC: consulta exacta, duplicados, idempotencia de operaciones~~ (hecho).
+4. ~~Resúmenes por referencia/acabado/ubicación e historial~~ (hecho).
+5. ~~Frontend funcional de inventario~~ (hecho, primera versión). Pendiente:
+   persistencia de sesión/refresh token, gestión de catálogos y ubicaciones
+   desde la UI, administración de usuarios en la UI.
+6. ~~Salidas, traslados y ajustes con concurrencia~~ (hecho). Pendiente de
+   definir: división de paquetes, traslado parcial, reservas, excedentes a
+   almacén, motivo obligatorio en salidas.
+7. Empresas/contactos, cotizador, orden y relación con despacho (siguiente
+   bloque).
 8. Tareas semanales, usuarios propios y asignación administrativa.
-9. Importación conciliada, pruebas operativas/hardware, despliegue y capacitación.
+9. Importación conciliada, pruebas con el lector UHF real, despliegue y
+   capacitación.
 
 Se estimó aproximadamente 20–30% del backend de fase 1, como apreciación de
 alcance, no medición objetiva ni dato para certificar entregables.

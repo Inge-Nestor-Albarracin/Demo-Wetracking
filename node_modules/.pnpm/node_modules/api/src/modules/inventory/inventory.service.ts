@@ -13,38 +13,14 @@ import {
   normalizeEpc,
   type RegisterBundleDto,
 } from './dto/register-bundle.dto.js';
+import {
+  bundleDetailInclude,
+  requireActiveRackInLocation,
+  type Tx,
+} from './inventory.shared.js';
 
 // Calendar used to decide what "today" is for physical arrival dates.
 const BUSINESS_TIME_ZONE = 'America/Bogota';
-
-const bundleDetailInclude = {
-  reference: {
-    include: {
-      family: { select: { id: true, code: true, name: true, active: true } },
-    },
-  },
-  finish: true,
-  inventoryLocation: {
-    include: {
-      branch: { select: { id: true, code: true, name: true, active: true } },
-    },
-  },
-  rack: {
-    include: {
-      aisle: {
-        select: { id: true, number: true, floorNumber: true, active: true },
-      },
-    },
-  },
-  movements: {
-    orderBy: { occurredAt: 'asc' },
-    include: {
-      performedBy: { select: { id: true, name: true, role: true } },
-    },
-  },
-} satisfies Prisma.BundleInclude;
-
-type Tx = Prisma.TransactionClient;
 
 interface ArrivalData {
   arrivalDatePrecision: RegisterBundleDto['arrivalDatePrecision'];
@@ -68,7 +44,7 @@ export class InventoryService {
         await this.requireNewEpc(tx, dto.epc);
         await this.requireActiveReference(tx, dto.referenceId);
         await this.requireActiveFinish(tx, dto.finishId);
-        await this.requireActiveRackInLocation(
+        await requireActiveRackInLocation(
           tx,
           dto.rackId,
           dto.inventoryLocationId,
@@ -249,39 +225,6 @@ export class InventoryService {
     const finish = await tx.finish.findUnique({ where: { id } });
     if (!finish) throw new NotFoundException('El color no existe');
     if (!finish.active) throw new BadRequestException('El color está inactivo');
-  }
-
-  private async requireActiveRackInLocation(
-    tx: Tx,
-    rackId: string,
-    inventoryLocationId: string,
-  ) {
-    const location = await tx.inventoryLocation.findUnique({
-      where: { id: inventoryLocationId },
-      include: { branch: { select: { active: true } } },
-    });
-    if (!location) throw new NotFoundException('La ubicación no existe');
-    if (!location.active || !location.branch.active) {
-      throw new BadRequestException('La ubicación o su sucursal está inactiva');
-    }
-
-    const rack = await tx.rack.findUnique({
-      where: { id: rackId },
-      include: {
-        aisle: {
-          select: { active: true, inventoryLocationId: true },
-        },
-      },
-    });
-    if (!rack) throw new NotFoundException('El burro no existe');
-    if (rack.aisle.inventoryLocationId !== inventoryLocationId) {
-      throw new BadRequestException(
-        'El burro no pertenece a la ubicación seleccionada',
-      );
-    }
-    if (!rack.active || !rack.aisle.active) {
-      throw new BadRequestException('El burro o su pasillo está inactivo');
-    }
   }
 }
 

@@ -1,53 +1,59 @@
-# Próxima tarea: consulta de paquetes y resúmenes de inventario
+# Próximo bloque: cotizador (empresas, contactos y cotizaciones)
 
-Estado previo (13/10/2026): familias y registro de paquetes con movimiento
-inicial están implementados y probados (ver docs/development-status.md).
-Esta propuesta debe ser confirmada por el desarrollador antes de empezar.
+Estado previo (13/10/2026): el bloque de inventario de fase 1 está completo en
+backend y frontend (ver docs/development-status.md). Esta propuesta debe ser
+confirmada por el desarrollador y la empresa antes de implementarse; varias
+reglas comerciales siguen abiertas.
 
-## Objetivo
+## Antes de empezar
 
-Exponer consultas de solo lectura del inventario actual que necesitan el
-formulario de bodega, el frontend de consulta y, más adelante, el cotizador.
-No implementar salidas, traslados, ajustes, frontend ni cotizador.
+1. Lee AGENTS.md, docs/project-context.md y docs/development-status.md.
+2. Ejecuta en apps/api: `pnpm build`, `pnpm lint`, `pnpm test` y
+   `pnpm exec vitest run --config ./vitest.config.e2e.ts` (31 pruebas hoy).
+   En apps/web: `pnpm build` y `pnpm lint`.
+3. Revisa `git status`. Recomendación pendiente del bloque anterior: añadir un
+   `.gitignore` en la raíz con `node_modules/` y dejar de versionar
+   `node_modules` en un commit separado, decidido por el desarrollador.
 
-## Inicio
+## Decisiones que deben confirmarse con la empresa
 
-Lee AGENTS.md, docs/project-context.md y docs/development-status.md.
-Inspecciona src/modules/inventory, catalog, locations, guards y schema.prisma.
-Ejecuta build, lint, `pnpm test` y la suite e2e antes de cambiar código.
+- Datos mínimos de empresa cliente/proveedor y de contacto (NIT, dirección,
+  ciudad, condiciones de pago, plazo de entrega).
+- Precio: ¿lista por referencia + acabado, por kilo, por perfil? ¿Cambia por
+  cliente? Moneda e impuestos (IVA) y descuentos permitidos.
+- Numeración y vigencia de cotizaciones; estados (borrador, enviada,
+  aceptada, vencida, anulada) y quién puede cambiarlos.
+- Paso de cotización a orden del cliente (SalesOrder) y relación con salidas.
+- Si una cotización aceptada reserva inventario (hoy NO hay reservas: guardar
+  una cotización no descuenta ni reserva stock).
+- Roles: ¿SALES crea cotizaciones? ¿quién aprueba descuentos?
+- Formato de documento para el cliente (PDF) y datos de la empresa emisora.
 
-## Funcionalidades propuestas
+## Alcance técnico propuesto (tras confirmar)
 
-1. `GET /inventory/bundles` con filtros explícitos y paginación:
-   referenceId, familyId (vía referencia), finishId, inventoryLocationId,
-   branchId, rackId; orden estable; límite máximo documentado.
-   Validar parámetros (DTO de query); filtro con ID inexistente → 404.
-2. `GET /inventory/summary` agrupando cantidades por referencia + acabado,
-   con desglose opcional por ubicación (sucursal/bodega/pasillo/burro).
-   Devuelve perfiles (suma de quantity) y número de paquetes.
-   Paquetes con quantity 0 no suman perfiles; definir si se listan.
-3. Lecturas para cualquier usuario autenticado; sin cambios de permisos.
+1. Migración nueva (revisar SQL antes de aplicarla): Company, Contact,
+   Quotation, QuotationLine. Las líneas guardan copia de descripción, precio
+   y condiciones al momento de cotizar (no dependen de cambios posteriores
+   del catálogo).
+2. Endpoints con permisos explícitos y operationKey para creaciones
+   repetibles desde el frontend.
+3. Consulta de disponibilidad desde la cotización usando
+   `GET /inventory/summary` (referencia + acabado); sin WebSockets/SSE.
+4. Frontend: listado y formulario de cotización reutilizando sesión,
+   `useLoad`, selectores y estilos existentes.
 
-## Reglas
+## No incluir
 
-- Solo lectura: ninguna consulta crea ni modifica paquetes o movimientos.
-- No distinguir longitud (pospuesta). Stock esperado/ubicación planeada no
-  existen todavía y no deben simularse.
-- Sin migraciones salvo índice justificado; revisar su SQL antes de aplicarlo.
-- Reutilizar PrismaService, guards, configureApp y test/support/e2e.ts.
+- Reservas o descuentos automáticos de inventario.
+- Tareas semanales (bloque posterior).
+- Integración del lector UHF o antena; importación de Excel.
+- Longitud, SKU o Product.
 
-## Pruebas mínimas
+## Pendientes del bloque de inventario que siguen abiertos
 
-- Filtros por referencia, familia, acabado y ubicación incluyen/excluyen.
-- Totales del resumen correctos con varios paquetes y ubicaciones.
-- Paginación y límite; query inválida 400; ID de filtro inexistente 404.
-- Sin token 401; READ_ONLY/SALES pueden leer.
-- Conteos de paquetes y movimientos sin cambios tras las consultas.
-- Datos con sufijo único y limpieza por ID/EPC exactos.
-
-## Después
-
-Salidas, traslados de paquete completo y ajustes con operationKey del cliente
-para reintentos idempotentes, bloqueo de concurrencia sobre el paquete y CHECK
-de saldos. Antes de implementarlos, confirmar con la empresa el procedimiento
-de salidas parciales, el tratamiento de cantidad 0 y los roles autorizados.
+- Validar el lector UHF Bluetooth real (formato del EPC, Enter final).
+- ¿Paquetes sin burro (almacén minorista)? Hoy rackId es obligatorio.
+- División de paquetes, traslado parcial, excedentes a almacén.
+- ¿Motivo/documento obligatorio en salidas? Hoy es opcional.
+- Persistencia de sesión (refresh token) y gestión de catálogos/ubicaciones/
+  usuarios desde la interfaz.

@@ -1,60 +1,53 @@
+/* Design tokens shared with the login page (views/LoginView.css). */
 :root {
-  --text: #2b2f36;
-  --text-muted: #5f6672;
-  --text-h: #11151c;
-  --bg: #f4f5f7;
+  --ink: #17364a;
+  --ink-strong: #0f2a3a;
+  --muted: #586b77;
+  --muted-soft: #71818b;
+  --bg: #f7f8f6;
   --surface: #ffffff;
-  --border: #d9dce1;
-  --accent: #1f5fa8;
-  --accent-hover: #184c87;
-  --accent-text: #ffffff;
-  --accent-soft: #e6eef8;
-  --danger: #b42318;
-  --danger-hover: #912018;
-  --success-bg: #e8f5ec;
-  --success-border: #7cc296;
-  --error-bg: #fdecea;
-  --error-border: #e99a92;
-  --warning-bg: #fff6e0;
-  --warning-border: #e5c06b;
-  --info-bg: #e9f1fb;
-  --info-border: #9cbde6;
-  --focus: #2e7dd7;
-  --radius: 8px;
+  --surface-alt: #f1f4f2;
+  --line: #d9e0df;
+  --line-strong: #bbc8cc;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, 'Cascadia Mono', monospace;
+  --navy-1: #0a243d;
+  --navy-2: #103c53;
+  --navy-text: #f7faf9;
+  --navy-muted: #adc2cc;
+  --mint: #9edbcf;
+  --mint-strong: #83d8c9;
+  --mint-soft: #e8f4f1;
 
-  font: 16px/1.45 var(--sans);
-  color-scheme: light dark;
-  color: var(--text);
+  --primary: #173e4b;
+  --primary-hover: #235664;
+  --primary-active: #0e2c36;
+  --focus: #147a80;
+
+  --danger: #a63c2e;
+  --danger-hover: #8a2f23;
+  --success-bg: #eaf6f1;
+  --success-border: #5fae94;
+  --error-bg: #fff0ed;
+  --error-border: #bc6355;
+  --warning-bg: #fff6df;
+  --warning-border: #af8932;
+  --info-bg: #eef5f7;
+  --info-border: #7fa9b8;
+
+  --radius: 3px;
+  --shadow: 0 1px 2px #0f2a3a0f, 0 6px 20px -12px #0f2a3a40;
+
+  --sans: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --serif: Georgia, 'Times New Roman', serif;
+  --mono: Consolas, ui-monospace, 'Cascadia Mono', monospace;
+
+  /* Same light palette as the login page. */
+  color-scheme: light;
+  font: 15px/1.5 var(--sans);
+  color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #d5d9e0;
-    --text-muted: #9aa2ae;
-    --text-h: #f3f5f8;
-    --bg: #14171c;
-    --surface: #1d2128;
-    --border: #343a44;
-    --accent: #5b9be0;
-    --accent-hover: #78afe8;
-    --accent-text: #0d1117;
-    --accent-soft: #1f2f44;
-    --danger: #f07167;
-    --danger-hover: #f48d85;
-    --success-bg: #17301f;
-    --success-border: #2f6b43;
-    --error-bg: #3a1a18;
-    --error-border: #7a3530;
-    --warning-bg: #352a12;
-    --warning-border: #7a6026;
-    --info-bg: #182638;
-    --info-border: #2f4f7a;
-  }
+  -webkit-text-size-adjust: 100%;
 }
 
 *,
@@ -72,18 +65,9 @@ body {
 h1,
 h2,
 h3 {
-  color: var(--text-h);
-  line-height: 1.2;
-}
-
-h2 {
-  font-size: 1.5rem;
-  margin: 0 0 16px;
-}
-
-h3 {
-  font-size: 1.1rem;
-  margin: 24px 0 12px;
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.15;
 }
 
 p {
@@ -99,6 +83,15 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

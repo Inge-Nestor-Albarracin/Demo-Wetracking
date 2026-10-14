@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { IconChevron, IconFilter } from './icons'
 
 export function Field({
   label,
@@ -17,6 +18,98 @@ export function Field({
       {children}
       {hint ? <span className="field-hint">{hint}</span> : null}
     </label>
+  )
+}
+
+// Page title in the login style: uppercase eyebrow + serif headline.
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+}: {
+  eyebrow: string
+  title: ReactNode
+  description?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <header className="page-header">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 className="page-title">{title}</h1>
+        {description ? <p className="page-description">{description}</p> : null}
+      </div>
+      {actions ? <div className="page-actions">{actions}</div> : null}
+    </header>
+  )
+}
+
+// Numbered form block ("01 Producto"), echoing the login feature list.
+export function Section({
+  number,
+  title,
+  description,
+  children,
+}: {
+  number: string
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <section className="section-card">
+      <header className="section-head">
+        <span className="section-number" aria-hidden="true">{number}</span>
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
+      </header>
+      <div className="section-body">{children}</div>
+    </section>
+  )
+}
+
+export function Kpi({ label, value, hint, dark }: { label: string; value: ReactNode; hint?: string; dark?: boolean }) {
+  return (
+    <div className={dark ? 'kpi dark' : 'kpi'}>
+      <span className="kpi-label">{label}</span>
+      <strong className="kpi-value">{value}</strong>
+      {hint ? <span className="kpi-hint">{hint}</span> : null}
+    </div>
+  )
+}
+
+// Collapsible filter panel. Open by default on wide screens; on phones the
+// user expands it when needed.
+export function FilterPanel({
+  activeCount,
+  onClear,
+  children,
+}: {
+  activeCount: number
+  onClear: () => void
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(() => window.matchMedia('(min-width: 761px)').matches)
+  return (
+    <section className={open ? 'filter-panel open' : 'filter-panel'}>
+      <div className="filter-bar">
+        <button type="button" className="filter-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <IconFilter />
+          <span>Filtros</span>
+          {activeCount > 0 ? <span className="count-pill">{activeCount}</span> : null}
+          <IconChevron className="chevron" />
+        </button>
+        {activeCount > 0 ? (
+          <button type="button" className="text-button" onClick={onClear}>
+            Limpiar filtros
+          </button>
+        ) : null}
+      </div>
+      {open ? <div className="filters">{children}</div> : null}
+    </section>
   )
 }
 
@@ -43,8 +136,13 @@ export function Loading({ label = 'Cargando…' }: { label?: string }) {
   )
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="empty">{children}</p>
+export function Empty({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <div className="empty">
+      {title ? <strong>{title}</strong> : null}
+      <p>{children}</p>
+    </div>
+  )
 }
 
 export function Pagination({
@@ -62,25 +160,27 @@ export function Pagination({
 }) {
   return (
     <nav className="pagination" aria-label="Paginación">
-      <button
-        type="button"
-        className="button button-secondary"
-        disabled={disabled || page <= 1}
-        onClick={() => onChange(page - 1)}
-      >
-        Anterior
-      </button>
-      <span>
-        Página {page} de {totalPages} · {total} registros
+      <span className="pagination-info">
+        Página <strong>{page}</strong> de {totalPages} · {total} {total === 1 ? 'registro' : 'registros'}
       </span>
-      <button
-        type="button"
-        className="button button-secondary"
-        disabled={disabled || page >= totalPages}
-        onClick={() => onChange(page + 1)}
-      >
-        Siguiente
-      </button>
+      <div className="pagination-buttons">
+        <button
+          type="button"
+          className="button button-secondary"
+          disabled={disabled || page <= 1}
+          onClick={() => onChange(page - 1)}
+        >
+          Anterior
+        </button>
+        <button
+          type="button"
+          className="button button-secondary"
+          disabled={disabled || page >= totalPages}
+          onClick={() => onChange(page + 1)}
+        >
+          Siguiente
+        </button>
+      </div>
     </nav>
   )
 }

@@ -64,7 +64,7 @@ export function LocationSelectors({
   const required = mode === 'form'
   const all = mode === 'filter' ? 'Todas' : null
   const placeholder = (parentChosen: boolean, loading: boolean, empty: boolean, text: string) => {
-    if (!parentChosen) return 'Selecciona primero el nivel anterior'
+    if (!parentChosen) return all ?? 'Elige el nivel anterior'
     if (loading) return 'Cargando…'
     if (empty) return 'Sin opciones activas'
     return all ?? text

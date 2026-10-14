@@ -1,17 +1,19 @@
 import { Fragment, useState } from 'react'
 import type { SummaryPage } from '../api/types'
 import { CatalogSelectors } from '../components/CatalogSelectors'
+import { IconPin } from '../components/icons'
 import { LocationSelectors } from '../components/LocationSelectors'
-import { Empty, Loading, Notice, Pagination } from '../components/ui'
-import { finishLabel, referenceLabel } from '../lib/format'
+import { Empty, FilterPanel, Kpi, Loading, Notice, PageHeader, Pagination } from '../components/ui'
 import { EMPTY_CATALOG, EMPTY_LOCATION, type CatalogValue, type LocationValue } from '../lib/forms'
 import { queryString, useLoad } from '../lib/useLoad'
+import type { Navigate } from './navigation'
 
 const PAGE_SIZE = 25
+const number = new Intl.NumberFormat('es-CO')
 
 // Available profiles per reference + finish, computed by the API from the
 // current bundles. Empty bundles are not counted.
-export function SummaryView() {
+export function SummaryView({ navigate }: { navigate: Navigate }) {
   const [catalog, setCatalog] = useState<CatalogValue>(EMPTY_CATALOG)
   const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION)
   const [page, setPage] = useState(1)
@@ -27,6 +29,8 @@ export function SummaryView() {
     })}`,
   )
 
+  const activeCount = [catalog.familyId, location.branchId, location.inventoryLocationId].filter(Boolean).length
+
   const toggle = (key: string) =>
     setOpen((current) => {
       const next = new Set(current)
@@ -35,10 +39,35 @@ export function SummaryView() {
       return next
     })
 
+  const data = summary.data
+
   return (
-    <section>
-      <h2>Resumen de inventario</h2>
-      <div className="card filters">
+    <>
+      <PageHeader
+        eyebrow="Inventario · Existencias"
+        title="Resumen de inventario"
+        description="Perfiles disponibles por referencia y acabado, calculados desde los paquetes actuales. Los paquetes agotados no se cuentan."
+      />
+
+      <div className="kpis">
+        <Kpi
+          dark
+          label="Perfiles disponibles"
+          value={data ? number.format(data.totals.profiles) : '—'}
+          hint={activeCount > 0 ? 'Con los filtros aplicados' : 'Todo el inventario'}
+        />
+        <Kpi label="Paquetes con existencias" value={data ? number.format(data.totals.bundles) : '—'} />
+        <Kpi label="Referencia + acabado" value={data ? number.format(data.total) : '—'} hint="Combinaciones con stock" />
+      </div>
+
+      <FilterPanel
+        activeCount={activeCount}
+        onClear={() => {
+          setCatalog(EMPTY_CATALOG)
+          setLocation(EMPTY_LOCATION)
+          setPage(1)
+        }}
+      >
         <CatalogSelectors
           mode="filter"
           showReference={false}
@@ -58,23 +87,20 @@ export function SummaryView() {
             setPage(1)
           }}
         />
-      </div>
+      </FilterPanel>
 
       {summary.error ? <Notice kind="error">{summary.error}</Notice> : null}
-      {summary.loading && !summary.data ? <Loading /> : null}
-      {summary.data ? (
-        <p className="totals">
-          <strong>{summary.data.totals.profiles}</strong> {summary.data.totals.profiles === 1 ? 'perfil disponible' : 'perfiles disponibles'} en{' '}
-          <strong>{summary.data.totals.bundles}</strong>{' '}
-          {summary.data.totals.bundles === 1 ? 'paquete con existencias' : 'paquetes con existencias'}
-        </p>
+      {summary.loading && !data ? <Loading label="Calculando existencias…" /> : null}
+
+      {data && data.items.length === 0 ? (
+        <Empty title="Sin existencias">
+          {activeCount > 0 ? 'No hay perfiles disponibles con estos filtros.' : 'Todavía no hay paquetes con perfiles disponibles.'}
+        </Empty>
       ) : null}
-      {summary.data && summary.data.items.length === 0 ? (
-        <Empty>No hay existencias con estos filtros.</Empty>
-      ) : null}
-      {summary.data && summary.data.items.length > 0 ? (
+
+      {data && data.items.length > 0 ? (
         <>
-          <div className="table-wrap" aria-busy={summary.loading}>
+          <div className="table-wrap stack" aria-busy={summary.loading}>
             <table>
               <thead>
                 <tr>
@@ -83,38 +109,70 @@ export function SummaryView() {
                   <th>Acabado</th>
                   <th className="num">Perfiles</th>
                   <th className="num">Paquetes</th>
-                  <th />
+                  <th>
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {summary.data.items.map((group) => {
+                {data.items.map((group) => {
                   const key = `${group.reference.id}|${group.finish.id}`
                   const expanded = open.has(key)
                   return (
                     <Fragment key={key}>
                       <tr>
-                        <td>{referenceLabel(group.reference)}</td>
-                        <td>{group.reference.family ? group.reference.family.name : '—'}</td>
-                        <td>{finishLabel(group.finish)}</td>
-                        <td className="num">{group.profiles}</td>
-                        <td className="num">{group.bundles}</td>
-                        <td>
-                          <button type="button" className="link" aria-expanded={expanded} onClick={() => toggle(key)}>
-                            {expanded ? 'Ocultar ubicaciones' : 'Ver ubicaciones'}
-                          </button>
+                        <td className="card-title" data-label="Referencia">
+                          <span className="cell-main">{group.reference.code}</span>
+                          {group.reference.description ? <span className="cell-sub">{group.reference.description}</span> : null}
+                        </td>
+                        <td data-label="Familia">{group.reference.family ? group.reference.family.name : '—'}</td>
+                        <td data-label="Acabado">
+                          <span className="cell-main">{group.finish.code}</span>
+                          {group.finish.description ? <span className="cell-sub">{group.finish.description}</span> : null}
+                        </td>
+                        <td className="num" data-label="Perfiles">
+                          <strong>{number.format(group.profiles)}</strong>
+                        </td>
+                        <td className="num" data-label="Paquetes">{group.bundles}</td>
+                        <td className="no-label" data-label="Acciones">
+                          <div className="actions">
+                            <button type="button" className="text-button" aria-expanded={expanded} onClick={() => toggle(key)}>
+                              {expanded ? 'Ocultar ubicaciones' : `Ubicaciones (${group.locations.length})`}
+                            </button>
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() =>
+                                navigate({
+                                  name: 'bundles',
+                                  catalog: { referenceId: group.reference.id, finishId: group.finish.id },
+                                })
+                              }
+                            >
+                              Ver paquetes
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {expanded
                         ? group.locations.map((row) => (
                             <tr key={`${key}|${row.inventoryLocation.id}|${row.rack?.id ?? ''}`} className="subrow">
-                              <td colSpan={3}>
-                                {row.inventoryLocation.branch.name} · {row.inventoryLocation.name}
-                                {row.aisle ? ` · Pasillo ${row.aisle.number}` : ''}
-                                {row.rack ? ` · Burro ${row.rack.number}` : ' · Sin burro'}
+                              <td colSpan={3} className="no-label" data-label="Ubicación">
+                                <span className="location-line">
+                                  <IconPin />
+                                  <span>
+                                    <span className="cell-main">
+                                      {row.inventoryLocation.name}
+                                      {row.aisle ? ` · Pasillo ${row.aisle.number}` : ''}
+                                      {row.rack ? ` · Burro ${row.rack.number}` : ' · Sin burro'}
+                                    </span>
+                                    <span className="cell-sub">{row.inventoryLocation.branch.name}</span>
+                                  </span>
+                                </span>
                               </td>
-                              <td className="num">{row.profiles}</td>
-                              <td className="num">{row.bundles}</td>
-                              <td />
+                              <td className="num" data-label="Perfiles">{number.format(row.profiles)}</td>
+                              <td className="num" data-label="Paquetes">{row.bundles}</td>
+                              <td className="no-label" aria-hidden="true" />
                             </tr>
                           ))
                         : null}
@@ -125,14 +183,14 @@ export function SummaryView() {
             </table>
           </div>
           <Pagination
-            page={summary.data.page}
-            totalPages={summary.data.totalPages}
-            total={summary.data.total}
+            page={data.page}
+            totalPages={data.totalPages}
+            total={data.total}
             onChange={setPage}
             disabled={summary.loading}
           />
         </>
       ) : null}
-    </section>
+    </>
   )
 }

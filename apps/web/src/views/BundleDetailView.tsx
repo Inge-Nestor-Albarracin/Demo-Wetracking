@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { BundleDetail, Movement, Page } from '../api/types'
 import { OperationsPanel } from '../components/OperationsPanel'
-import { Empty, Loading, Notice, Pagination } from '../components/ui'
+import { Empty, Loading, Notice, PageHeader, Pagination } from '../components/ui'
 import {
   MOVEMENT_LABELS,
   bundlePlace,
@@ -39,22 +39,30 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
 
   if (bundle.error) {
     return (
-      <section>
+      <>
+        <PageHeader eyebrow="Inventario · Paquete" title="Paquete no disponible" />
         <Notice kind="error">{bundle.error}</Notice>
         <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'lookup' })}>
           Volver a la consulta
         </button>
-      </section>
+      </>
     )
   }
   if (!bundle.data) return <Loading />
   const data = bundle.data
 
   return (
-    <section>
-      <h2>
-        Paquete <span className="mono">{data.epc}</span>
-      </h2>
+    <>
+      <PageHeader
+        eyebrow="Inventario · Paquete"
+        title={<span className="mono">{data.epc}</span>}
+        description={`${referenceLabel(data.reference)} · ${finishLabel(data.finish)}`}
+        actions={
+          <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'lookup' })}>
+            Consultar otro EPC
+          </button>
+        }
+      />
       {message ? <Notice kind="success">{message}</Notice> : null}
 
       <div className="card detail-grid" aria-busy={bundle.loading}>
@@ -97,23 +105,22 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
         ) : null}
       </div>
 
-      <h3>Operaciones</h3>
+      <h2 className="subtitle">Operaciones</h2>
       <div className="card">
         <OperationsPanel bundle={data} onDone={onDone} />
       </div>
 
-      <h3>Historial de movimientos</h3>
+      <h2 className="subtitle">Historial de movimientos</h2>
       {history.error ? <Notice kind="error">{history.error}</Notice> : null}
       {history.loading && !history.data ? <Loading /> : null}
       {history.data && history.data.items.length === 0 ? <Empty>Sin movimientos.</Empty> : null}
       {history.data && history.data.items.length > 0 ? (
         <>
-          <div className="table-wrap" aria-busy={history.loading}>
+          <div className="table-wrap stack" aria-busy={history.loading}>
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Tipo</th>
+                  <th>Movimiento</th>
                   <th className="num">Cantidad</th>
                   <th className="num">Saldo</th>
                   <th>Ubicación</th>
@@ -124,15 +131,17 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
               <tbody>
                 {history.data.items.map((movement) => (
                   <tr key={movement.id}>
-                    <td>{formatDateTime(movement.occurredAt)}</td>
-                    <td>{MOVEMENT_LABELS[movement.type]}</td>
-                    <td className="num">{movement.quantity}</td>
-                    <td className="num">
+                    <td className="card-title" data-label="Fecha">
+                      <span className="cell-main">{MOVEMENT_LABELS[movement.type]}</span>
+                      <span className="cell-sub">{formatDateTime(movement.occurredAt)}</span>
+                    </td>
+                    <td className="num" data-label="Cantidad">{movement.quantity}</td>
+                    <td className="num" data-label="Saldo">
                       {movement.quantityBefore} → {movement.quantityAfter}
                     </td>
-                    <td>{movementPlaces(movement)}</td>
-                    <td>{movement.performedBy.name}</td>
-                    <td>{movement.reason ?? '—'}</td>
+                    <td data-label="Ubicación">{movementPlaces(movement)}</td>
+                    <td data-label="Responsable">{movement.performedBy.name}</td>
+                    <td data-label="Motivo">{movement.reason ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -147,6 +156,6 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
           />
         </>
       ) : null}
-    </section>
+    </>
   )
 }

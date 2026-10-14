@@ -3,10 +3,10 @@ import { EMPTY_ARRIVAL, type ArrivalValue } from '../lib/forms'
 import { MONTHS, todayIso } from '../lib/format'
 import { Field } from './ui'
 
-const OPTIONS: { value: ArrivalDatePrecision; label: string }[] = [
-  { value: 'EXACT', label: 'Fecha exacta' },
-  { value: 'MONTH', label: 'Solo mes y año' },
-  { value: 'UNKNOWN', label: 'Desconocida' },
+const OPTIONS: { value: ArrivalDatePrecision; label: string; hint: string }[] = [
+  { value: 'EXACT', label: 'Fecha exacta', hint: 'Se conoce el día' },
+  { value: 'MONTH', label: 'Mes y año', hint: 'Solo el mes de llegada' },
+  { value: 'UNKNOWN', label: 'Desconocida', hint: 'No hay registro' },
 ]
 
 // Physical arrival of the merchandise. It is never invented: when only the
@@ -24,8 +24,7 @@ export function ArrivalFields({
   const currentYear = Number(today.slice(0, 4))
 
   return (
-    <fieldset className="field field-wide fieldset" disabled={disabled}>
-      <legend className="field-label">Llegada física de la mercancía</legend>
+    <fieldset className="field field-wide fieldset" disabled={disabled} aria-label="Llegada física de la mercancía">
       <div className="segmented" role="radiogroup">
         {OPTIONS.map((option) => (
           <label key={option.value} className={value.precision === option.value ? 'segment selected' : 'segment'}>
@@ -36,7 +35,10 @@ export function ArrivalFields({
               checked={value.precision === option.value}
               onChange={() => onChange({ ...EMPTY_ARRIVAL, precision: option.value })}
             />
-            {option.label}
+            <span>
+              {option.label}
+              <small>{option.hint}</small>
+            </span>
           </label>
         ))}
       </div>
@@ -66,7 +68,7 @@ export function ArrivalFields({
         <div className="inline-fields">
           <Field label="Mes">
             <select required value={value.month} onChange={(e) => onChange({ ...value, month: e.target.value })}>
-              <option value="">Mes</option>
+              <option value="">Selecciona el mes</option>
               {MONTHS.map((name, index) => (
                 <option key={name} value={index + 1}>
                   {name}
@@ -81,6 +83,7 @@ export function ArrivalFields({
               required
               min={1900}
               max={currentYear}
+              placeholder={String(currentYear)}
               value={value.year}
               onChange={(e) => onChange({ ...value, year: e.target.value })}
             />
@@ -94,4 +97,3 @@ export function ArrivalFields({
     </fieldset>
   )
 }
-

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError, describeError } from '../api/client'
 import type { BundleDetail } from '../api/types'
-import { Field, Notice } from '../components/ui'
+import { IconArrow, IconScan } from '../components/icons'
+import { Field, Notice, PageHeader } from '../components/ui'
 import { canOperate, useSession } from '../session/session-context'
 import type { Navigate } from './navigation'
 
@@ -31,37 +32,83 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
   }
 
   return (
-    <section>
-      <h2>Consultar por EPC</h2>
+    <>
+      <PageHeader
+        eyebrow="Inventario · Consulta"
+        title="Consultar por EPC"
+        description="Lee la etiqueta del paquete o escribe su código para ver referencia, acabado, ubicación, saldo y movimientos."
+      />
+
       {error ? <Notice kind="error">{error}</Notice> : null}
       {notFound ? (
         <Notice kind="info">
-          No hay un paquete registrado con el EPC <span className="mono">{notFound}</span>.{' '}
-          {canOperate(user?.role) ? (
-            <button type="button" className="link" onClick={() => navigate({ name: 'register', epc: notFound })}>
-              Registrar un paquete con este EPC
-            </button>
-          ) : null}
+          <div className="notfound">
+            <span>
+              No hay un paquete registrado con el EPC <strong className="mono">{notFound}</strong>.
+            </span>
+            {canOperate(user?.role) ? (
+              <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'register', epc: notFound })}>
+                Registrar con este EPC
+              </button>
+            ) : null}
+          </div>
         </Notice>
       ) : null}
-      <form className="card search-form" onSubmit={submit}>
-        <Field label="EPC" wide hint="Coincidencia exacta. Puedes leer la etiqueta o escribir el código.">
-          <input
-            className="mono"
-            type="text"
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            autoFocus
-            required
-            value={epc}
-            onChange={(e) => setEpc(e.target.value.toUpperCase())}
-          />
-        </Field>
-        <button type="submit" className="button" disabled={pending}>
-          {pending ? 'Buscando…' : 'Buscar'}
-        </button>
+
+      <form className="card lookup-card" onSubmit={submit}>
+        <div className="lookup-form">
+          <Field label="Código EPC" hint="Coincidencia exacta; mayúsculas y minúsculas dan igual.">
+            <span className="input-wrap large">
+              <IconScan />
+              <input
+                className="mono"
+                type="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus
+                required
+                placeholder="E2003412…"
+                value={epc}
+                onChange={(e) => {
+                  setEpc(e.target.value.toUpperCase())
+                  setNotFound(null)
+                }}
+              />
+            </span>
+          </Field>
+          <button type="submit" className="cta" disabled={pending || !epc.trim()}>
+            <span aria-live="polite">{pending ? 'Buscando…' : 'Buscar paquete'}</span>
+            <span className="cta-icon" aria-hidden="true">
+              {pending ? <span className="cta-progress" /> : <IconArrow />}
+            </span>
+          </button>
+        </div>
       </form>
-    </section>
+
+      <div className="lookup-tips">
+        <div>
+          <span aria-hidden="true">01</span>
+          <p>
+            <strong>Lee la etiqueta</strong>
+            <small>Con el campo activo, el lector en modo teclado escribe el EPC.</small>
+          </p>
+        </div>
+        <div>
+          <span aria-hidden="true">02</span>
+          <p>
+            <strong>Revisa el paquete</strong>
+            <small>Saldo actual, ubicación e historial de movimientos.</small>
+          </p>
+        </div>
+        <div>
+          <span aria-hidden="true">03</span>
+          <p>
+            <strong>Registra operaciones</strong>
+            <small>Salidas, traslados o ajustes según tu rol.</small>
+          </p>
+        </div>
+      </div>
+    </>
   )
 }

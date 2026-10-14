@@ -1,8 +1,15 @@
+import { useEffect } from 'react'
 import type { Family, Finish, Reference } from '../api/types'
 import { finishLabel, referenceLabel } from '../lib/format'
 import type { CatalogValue } from '../lib/forms'
 import { useLoad } from '../lib/useLoad'
 import { Field } from './ui'
+
+export interface CatalogLabels {
+  family: string
+  reference: string
+  finish: string
+}
 
 // Family only filters the reference list. Changing it clears the reference.
 // In "filter" mode every level accepts "Todas"; in "form" mode only active
@@ -14,6 +21,7 @@ export function CatalogSelectors({
   showReference = true,
   showFinish = true,
   disabled,
+  onDescribe,
 }: {
   value: CatalogValue
   onChange: (value: CatalogValue) => void
@@ -21,6 +29,8 @@ export function CatalogSelectors({
   showReference?: boolean
   showFinish?: boolean
   disabled?: boolean
+  // Receives readable labels of the current selection.
+  onDescribe?: (labels: CatalogLabels) => void
 }) {
   const families = useLoad<Family[]>('/catalog/families')
   const references = useLoad<Reference[]>(
@@ -36,6 +46,16 @@ export function CatalogSelectors({
   const referenceOptions = onlyActive(references.data)
   const finishOptions = onlyActive(finishes.data)
   const familyOptions = onlyActive(families.data)
+
+  const family = families.data?.find((f) => f.id === value.familyId)
+  const reference = references.data?.find((r) => r.id === value.referenceId)
+  const finish = finishes.data?.find((f) => f.id === value.finishId)
+  const familyText = family ? `${family.code} — ${family.name}` : ''
+  const referenceText = reference ? referenceLabel(reference) : ''
+  const finishText = finish ? finishLabel(finish) : ''
+  useEffect(() => {
+    onDescribe?.({ family: familyText, reference: referenceText, finish: finishText })
+  }, [familyText, referenceText, finishText, onDescribe])
 
   return (
     <>

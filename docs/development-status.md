@@ -1,5 +1,42 @@
 # Estado de desarrollo
 
+## Adaptación del login (14/10/2026)
+
+- Petición actual: adaptar `Login page diseño sobrio.zip` al acceso existente;
+  sin recuperación de contraseña, con otra tipografía y un botón propio.
+  El bloque de cotizador descrito en `next-task.md` no forma parte de esta tarea.
+- Inspección: Git está disponible. Se preservaron los cambios previos de
+  `apps/api/tsconfig.build.tsbuildinfo` y su ruta enlazada en node_modules.
+  El ZIP es una maqueta con envío simulado y recordar sesión sin implementar;
+  la aplicación usa `SessionProvider.login` y sesión en memoria. Se adaptó
+  únicamente la presentación, conservando la autenticación real y sus avisos.
+- Archivos: `apps/web/src/views/LoginView.tsx`, nuevo
+  `apps/web/src/views/LoginView.css`, `apps/web/src/App.css` (retira estilos
+  anteriores del login) y este documento.
+- Diseño de dos paneles, marca Solaluminios y WeTracking de la referencia;
+  títulos Georgia y texto Trebuchet MS con alternativas locales, sin descargas
+  de fuentes ni dependencias nuevas. Botón sólido con flecha separada,
+  mostrar/ocultar contraseña, etiquetas accesibles y estados de envío.
+  Estilos limitados al login, con paleta clara explícita y movimiento reducido.
+- Sin opción de contraseña olvidada ni recordar sesión. Se conserva el aviso
+  de reingreso al recargar; la ayuda remite al administrador, sin enlaces vacíos
+  de soporte, privacidad o términos de la maqueta.
+- Validación: `pnpm.cmd --version` → 11.4.0;
+  `pnpm.cmd --dir apps/web build` → OK;
+  `pnpm.cmd --dir apps/web lint` → OK.
+  Se usó `.cmd` porque PowerShell bloquea el wrapper `pnpm.ps1`.
+- Navegador: el integrado falló al conectar (`missing field sandboxPolicy`).
+  Revisión realizada con Chrome headless y perfil temporal: escritorio
+  1440×1000, móvil 390×844, móvil pequeño 320×740 y tablet 768×1024.
+  Sin desbordamiento horizontal en los tres tamaños adaptativos; capturas
+  de escritorio, móvil y tablet inspeccionadas. Comprobados campos obligatorios,
+  mostrar/ocultar contraseña, `aria-pressed` y ausencia de recuperación/recordar.
+  Evidencias y script provisional en `apps/web/login-review.local/` (ignorado).
+- No se ejecutó login exitoso contra el API: no había servidor en el puerto
+  3000 ni sesión disponible. Pendiente: ingresar con un usuario existente y
+  comprobar llegada al inventario y errores de credenciales/servidor.
+  No hubo cambios de API, BD, migraciones, credenciales o datos de prueba.
+
 Fecha de traspaso: 13 de octubre de 2026.
 Fuente: conversación con el desarrollador y resultados que él ejecutó en su
 equipo. El proyecto local completo no fue inspeccionado desde ChatGPT.

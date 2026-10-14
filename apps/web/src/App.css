@@ -423,24 +423,3 @@ tr.subrow td {
   color: var(--accent);
   font-weight: 600;
 }
-
-/* Login */
-.login {
-  min-height: 100svh;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.login-card h1 {
-  margin: 0;
-  font-size: 1.8rem;
-}

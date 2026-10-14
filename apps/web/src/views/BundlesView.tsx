@@ -101,7 +101,7 @@ export function BundlesView({
             <table>
               <thead>
                 <tr>
-                  <th>EPC</th>
+                  <th>Chip</th>
                   <th>Referencia</th>
                   <th>Acabado</th>
                   <th className="num">Perfiles</th>
@@ -112,7 +112,7 @@ export function BundlesView({
               <tbody>
                 {data.items.map((bundle) => (
                   <tr key={bundle.id}>
-                    <td className="card-title" data-label="EPC">
+                    <td className="card-title" data-label="Chip">
                       <button type="button" className="epc-link" onClick={() => navigate({ name: 'bundle', id: bundle.id })}>
                         {bundle.epc}
                       </button>

@@ -35,7 +35,7 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
     <>
       <PageHeader
         eyebrow="Inventario · Consulta"
-        title="Consultar por EPC"
+        title="Consultar por chip"
         description="Lee la etiqueta del paquete o escribe su código para ver referencia, acabado, ubicación, saldo y movimientos."
       />
 
@@ -44,11 +44,11 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
         <Notice kind="info">
           <div className="notfound">
             <span>
-              No hay un paquete registrado con el EPC <strong className="mono">{notFound}</strong>.
+              No hay un paquete registrado con el chip <strong className="mono">{notFound}</strong>.
             </span>
             {canOperate(user?.role) ? (
               <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'register', epc: notFound })}>
-                Registrar con este EPC
+                Registrar con este chip
               </button>
             ) : null}
           </div>
@@ -57,7 +57,7 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
 
       <form className="card lookup-card" onSubmit={submit}>
         <div className="lookup-form">
-          <Field label="Código EPC" hint="Coincidencia exacta; mayúsculas y minúsculas dan igual.">
+          <Field label="Código del chip" hint="Coincidencia exacta; mayúsculas y minúsculas dan igual.">
             <span className="input-wrap large">
               <IconScan />
               <input
@@ -91,7 +91,7 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
           <span aria-hidden="true">01</span>
           <p>
             <strong>Lee la etiqueta</strong>
-            <small>Con el campo activo, el lector en modo teclado escribe el EPC.</small>
+            <small>Con el campo activo, el lector en modo teclado escribe el código del chip.</small>
           </p>
         </div>
         <div>

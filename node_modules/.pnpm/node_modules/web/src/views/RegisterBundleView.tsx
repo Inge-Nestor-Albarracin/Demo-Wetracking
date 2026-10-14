@@ -78,7 +78,7 @@ export function RegisterBundleView({ initialEpc, navigate }: { initialEpc?: stri
       return
     }
     if (!normalizedEpc || epcInvalid) {
-      setError('El EPC solo puede contener letras y números, sin espacios.')
+      setError('El código del chip solo puede contener letras y números, sin espacios.')
       return
     }
     setPending(true)
@@ -119,7 +119,7 @@ export function RegisterBundleView({ initialEpc, navigate }: { initialEpc?: stri
     ['Perfiles', quantityValid ? `${amount} ${amount === 1 ? 'perfil' : 'perfiles'}` : null],
     ['Llegada', arrivalLabel],
     ['Ubicación', location.rackId ? locationLabel : null],
-    ['EPC', normalizedEpc && !epcInvalid ? normalizedEpc : null, true],
+    ['Chip', normalizedEpc && !epcInvalid ? normalizedEpc : null, true],
   ]
 
   return (
@@ -191,9 +191,9 @@ export function RegisterBundleView({ initialEpc, navigate }: { initialEpc?: stri
             />
           </Section>
 
-          <Section number="05" title="Etiqueta RFID" description="Lee el sticker UHF con el lector o escribe el EPC.">
+          <Section number="05" title="Etiqueta RFID" description="Lee el chip UHF con el lector o escribe su código.">
             <Field
-              label="EPC"
+              label="Código del chip"
               wide
               hint="Se guarda como texto en mayúsculas y conserva los ceros iniciales. La lectura con el lector Bluetooth aún debe comprobarse con el equipo real."
             >
@@ -268,7 +268,7 @@ export function RegisterBundleView({ initialEpc, navigate }: { initialEpc?: stri
                 </span>
               </button>
               <p className="summary-note">
-                Tras guardar se limpian EPC, cantidad y notas; producto, llegada y ubicación se conservan para el siguiente paquete.
+                Tras guardar se limpian chip, cantidad y notas; producto, llegada y ubicación se conservan para el siguiente paquete.
               </p>
             </footer>
           </section>

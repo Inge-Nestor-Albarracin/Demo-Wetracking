@@ -48,7 +48,7 @@ function Workspace() {
 
   const tabs: NavTab[] = [
     ...(operator ? [{ name: 'register' as const, label: 'Registrar paquete', short: 'Registrar', icon: IconRegister }] : []),
-    { name: 'lookup', label: 'Consultar EPC', short: 'EPC', icon: IconScan },
+    { name: 'lookup', label: 'Consultar chip', short: 'Chip', icon: IconScan },
     { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
     { name: 'summary', label: 'Resumen', short: 'Resumen', icon: IconChart },
   ]

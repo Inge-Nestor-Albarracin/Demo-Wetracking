@@ -490,6 +490,58 @@ Con usuarios y datos temporales `E2E-UI-*` creados por un script provisional:
   "Sucursal de prueba" (TEST-C7923B31). Los IDs de los acabados reales son
   UUID (no CUID), cargados por SQL anteriormente.
 
+## Rediseño responsive del frontend (14/10/2026)
+
+Basado en el login rediseñado por el desarrollador (`views/LoginView.css`):
+azul marino en degradado, tinta #17364a, acentos menta, foco #147a80,
+títulos serif Georgia, texto Trebuchet, cejas en mayúsculas y numeración
+monoespaciada. Solo frontend; sin cambios en el API.
+
+- `index.css`: tokens compartidos con el login (tema claro, como el login).
+- `App.css`: reescrito. Navegación: barra lateral azul marino en ≥1024 px,
+  cabecera con pestañas en 761–1023 px y barra inferior fija en ≤760 px
+  (respeta `safe-area-inset-bottom`). Tablas con `data-label` que se
+  convierten en tarjetas en ≤900 px.
+- `App.tsx`: nuevo armazón (marca WeTracking + Solaluminios, avatar, rol,
+  cierre de sesión).
+- Registrar: 5 secciones numeradas y panel lateral fijo "Nuevo paquete" con
+  resumen en vivo, barra de progreso y botón de guardar (en móvil, debajo).
+  Avisos de éxito/error dentro del panel, junto al botón.
+- Consultar EPC: buscador grande con icono, botón con flecha estilo login y
+  guía en 3 pasos.
+- Paquetes: filtros plegables con contador y "Limpiar filtros" (cerrados por
+  defecto en móvil); acepta filtros iniciales desde el resumen.
+- Resumen: 3 indicadores (perfiles, paquetes con existencias, combinaciones),
+  filtros plegables, desglose por ubicación y enlace "Ver paquetes" que abre
+  Paquetes filtrado por referencia + acabado.
+- Detalle de paquete: mismo encabezado y historial en tarjetas en móvil.
+- Componentes nuevos/ampliados: `components/icons.tsx`, `ui.tsx`
+  (PageHeader, Section, Kpi, FilterPanel), `CatalogSelectors` con
+  `onDescribe`.
+
+Verificación: `pnpm build` y `pnpm lint` de apps/web OK (0 avisos). En el
+navegador, con datos temporales `E2E-UI-*` (luego borrados por ID: 6
+movimientos, 5 paquetes, 1 usuario, catálogo y ubicaciones; 0 residuos):
+registro, EPC duplicado, resumen (42 perfiles / 4 paquetes, agotado
+excluido), desglose y "Ver paquetes" en escritorio; tablet 768×1024; móvil
+375×812 y 320×640 sin desbordamiento horizontal en las cuatro vistas. API sin
+cambios: no se repitieron sus pruebas.
+
+## Ajustes de interfaz y catálogo de prueba (14/10/2026)
+
+- En la interfaz la palabra "EPC" se reemplazó por "chip" (menú "Consultar
+  chip", "Código del chip", columna "Chip", etc.). Solo cambia el texto
+  visible: API, campos (`epc`), tipos y rutas siguen usando EPC. Los
+  mensajes de error del API se adaptan al mostrarse (`api/client.ts`,
+  `userWording`).
+- Consultar chip: letra más grande en los tres pasos (17/15 px).
+- Catálogo de prueba creado en la BD local (se conserva, no es real):
+  - Familia `PRUEBA` — "Familia de prueba", id `cmv8lh2gw0000iwuq6hb9skip`.
+  - Referencia `PRUEBA-001` — "Referencia de prueba", asociada a esa
+    familia, id `cmv8lh2hd0001iwuq8mb8tmr0`.
+  Para retirarlos: desactivarlos con PATCH (ADMIN) o borrarlos por esos IDs
+  exactos, siempre que no tengan paquetes asociados.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

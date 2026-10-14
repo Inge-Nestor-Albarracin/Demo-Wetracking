@@ -59,7 +59,7 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
         description={`${referenceLabel(data.reference)} · ${finishLabel(data.finish)}`}
         actions={
           <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'lookup' })}>
-            Consultar otro EPC
+            Consultar otro chip
           </button>
         }
       />

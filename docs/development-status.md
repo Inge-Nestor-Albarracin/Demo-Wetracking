@@ -542,6 +542,168 @@ cambios: no se repitieron sus pruebas.
   Para retirarlos: desactivarlos con PATCH (ADMIN) o borrarlos por esos IDs
   exactos, siempre que no tengan paquetes asociados.
 
+## Cola de registro + auditoría de seguridad (15/10/2026)
+
+### Cola de registro ("Guardar y continuar" → "Guardar definitivo")
+- API: `POST /inventory/bundles/batch` (ADMIN, WAREHOUSE), body
+  `{ bundles: RegisterBundleDto[] }`, 1–50 ítems. Todos los paquetes y sus
+  movimientos iniciales se crean en UNA transacción: o se guardan todos o
+  ninguno. Rechaza EPC repetidos en la lista (400 con `itemIndex`) y EPC ya
+  registrados (409 con `epcs`, antes de escribir). Errores por ítem:
+  "Paquete N (EPC …): …" + `itemIndex`. `POST /inventory/bundles` se conserva.
+- Web: "Guardar y continuar" valida y agrega a la lista (verifica que el chip
+  no esté en la lista ni registrado). La lista vive en `sessionStorage` por
+  usuario (sobrevive a cambiar de vista, recargar o sesión vencida en la misma
+  pestaña). "Guardar definitivo" pide confirmación (paquetes y perfiles) y
+  envía el lote; si falla, resalta el ítem y ofrece quitar los ya registrados.
+- Archivos: `inventory.service.ts` (createBundle compartido, registerBundles),
+  `dto/register-bundle.dto.ts` (RegisterBundleBatchDto, MAX_BATCH_SIZE),
+  `inventory.controller.ts`; web `lib/registrationQueue.ts`,
+  `components/RegistrationQueuePanel.tsx`, `views/RegisterBundleView.tsx`,
+  `api/client.ts` (ApiError.data).
+
+### Auditoría (agente de solo lectura) y correcciones aplicadas
+Sin hallazgos críticos. Aplicado:
+- A1 `.gitignore` raíz (node_modules, .env*, dist, tsbuildinfo) y `.env*` en
+  `apps/web/.gitignore`: un `.env` ya no puede entrar por las rutas enlazadas
+  `node_modules/.pnpm/node_modules/{api,web}`. Ruta corregida de Prisma
+  generado en `apps/api/.gitignore`. (No se des-versionó nada.)
+- A2 Bloqueo por cuenta en login (`auth/login-attempts.ts`): 5 fallos en
+  15 min → 429 durante 15 min; cuenta también emails inexistentes (no
+  enumera). `TRUST_PROXY` (número de saltos) para la IP real tras proxy.
+- M1 Cabeceras: sin `X-Powered-By`; `nosniff`, `X-Frame-Options DENY`,
+  `Referrer-Policy no-referrer`, CSP `default-src 'none'`, `Cache-Control:
+  no-store` (sin dependencia nueva).
+- M2 `SET LOCAL lock_timeout = '5s'` en operaciones → 409 "paquete ocupado"
+  en vez de esperar; pool `DATABASE_POOL_MAX` (por defecto 10, antes 5).
+- M3 Detalle de paquete: solo los 20 movimientos más recientes (desc).
+- M4 Web: UUID con respaldo `crypto.getRandomValues` (tablets por HTTP en LAN).
+- B1 No se puede desactivar al último ADMIN activo (bloqueo FOR UPDATE).
+- B3 Ajuste IN con tope de 1.000.000 perfiles → 400 (antes 500).
+- B11 Doble clic: guardas con `useRef` en operaciones y registro.
+Pendiente (no urgente o requiere decisión): ver la revisión del 15/10/2026
+más abajo, que corrige la nota sobre tokens y resuelve el des-versionado.
+
+### Pruebas
+- API: build y lint OK; `pnpm test` 8/8 (nuevos: login-attempts, users
+  último admin); e2e 43/43 en 7 archivos (nuevos: inventory-batch 7,
+  security 5).
+- Web: build y lint OK. Navegador (API en 3101, web en 5173): 3 chips a la
+  lista, chip repetido rechazado, BD sin cambios hasta confirmar, lista
+  conservada al cambiar de vista, guardado definitivo → 3 paquetes con 1
+  movimiento cada uno; lote con un chip ya registrado → nada guardado, ítem
+  resaltado, "Quitar de la lista los ya registrados".
+- Datos temporales borrados por ID (3 paquetes, 3 movimientos, usuario,
+  acabado, ubicaciones). En la BD hay 6 paquetes reales de prueba del usuario
+  "Wetracking" (14/10, chips E2801160…, referencia PRUEBA-001): no se tocaron.
+
+## Revisión focalizada (15/10/2026, tarde)
+
+### Comprobado (con evidencia ejecutada)
+
+1. Sesiones y desactivación — CORRECCIÓN del informe anterior.
+   - `JwtAuthGuard` (`jwt-auth.guard.ts:40-47`) consulta `user.active` en
+     CADA solicitud. Desactivar una cuenta rechaza de inmediato sus tokens ya
+     emitidos (401 "La sesión ya no está habilitada"). `Test-Auth.ps1:81-83`
+     ya lo verificaba; ahora también `test/security.e2e-spec.ts`
+     ("deactivating an account…"), que usa solo usuarios de prueba.
+   - La nota anterior "desactivar no invalida tokens" era incorrecta. No se
+     preparó migración.
+   - Cerrar sesión ≠ desactivar: cerrar sesión solo borra el token de la
+     memoria del navegador; una copia del token seguiría siendo válida hasta
+     su vencimiento (máx. 1 h). Desactivar sí corta el acceso al instante.
+   - Límite real (comprobado en la misma prueba): reactivar la cuenta dentro
+     de esa hora vuelve a validar el token anterior.
+2. Guardado por lotes idempotente (sin migración): `POST
+   /inventory/bundles/batch` exige `operationKey` (UUID del cliente). Cada
+   movimiento inicial usa la columna única existente con la clave
+   `bundle-batch:<uuid>:<n>`.
+   - Misma clave + lista equivalente (mismos chips, orden, cantidades,
+     ubicación, tipo, llegada, notas y usuario) → 200 `replayed: true` con
+     los paquetes ya guardados; no crea nada. Funciona aunque después haya
+     habido salidas (se compara con el movimiento inicial).
+   - Misma clave con otro contenido, otro orden, más/menos paquetes u otro
+     usuario → 409 "La clave de guardado ya se usó con otra lista".
+   - Reintentos simultáneos con la misma clave → uno 201, el resto 200, sin
+     duplicados (repetido 3 veces).
+   - Navegador: con `fetch` interceptado, la 1.ª petición llegó al servidor
+     (201, 2 paquetes) pero el navegador recibió error de red; la UI mostró la
+     lista como NO guardada y "no sabemos si se guardó". El reintento usó la
+     misma clave → 200 "La lista ya estaba guardada; el reintento no duplicó
+     nada"; la BD quedó con 2 paquetes y 1 movimiento cada uno.
+3. Lista pendiente (web):
+   - Aislamiento: clave por usuario en sessionStorage; el usuario B no vio la
+     lista de A en la misma pestaña (comprobado).
+   - Recuperación: tras volver a ingresar y tras recargar la página se
+     recuperó la lista con el aviso "Sigue sin guardar" (comprobado).
+   - Fallo de sessionStorage (simulado: setItem/removeItem lanzan): aviso
+     "Este navegador no permite conservar la lista…", la lista sigue en
+     memoria y el diálogo de salida ya no ofrece "conservar" (comprobado).
+     Lista ilegible al cargar → aviso y se ignora.
+   - Cerrar sesión con pendientes: diálogo con "Volver y guardar", "Salir y
+     conservar" (solo si el almacenamiento funciona) y "Descartar N y salir";
+     sin pendientes no hay diálogo (comprobado). Cerrar/recargar la pestaña
+     con pendientes registra aviso `beforeunload` (no observable desde la
+     automatización: la recarga se forzó).
+   - Visible que no está guardada: banner fijo "N paquetes sin guardar",
+     etiqueta "Sin guardar" en la lista y contador en el menú Registrar.
+   - Conflictos: ya no hay borrado masivo; cada chip en conflicto se marca
+     con "Ya está registrado en el inventario · Ver el paquete existente"
+     (abre el detalle y la lista se conserva) y el usuario decide quitarlo.
+     Al agregar un chip ya registrado se rechaza con el mismo enlace.
+4. Último administrador con concurrencia: base aislada
+   `solaluminios_dev_isolated_test` (mismo servidor PostgreSQL, creada por
+   `pnpm test:isolated`, migraciones aplicadas con `prisma migrate deploy`).
+   15 rondas de dos ADMIN desactivándose mutuamente a la vez → siempre 1
+   éxito, 1 rechazo y 1 ADMIN activo; y 4 ADMIN + actor cruzados → nunca 0.
+   La prueba se niega a correr si la BD no termina en `_isolated_test`. No se
+   desactivó ningún administrador real (BD de desarrollo: 1 ADMIN activo).
+   Mecanismo: `SELECT … FOR UPDATE` sobre ADMIN activos; tras esperar el
+   bloqueo, PostgreSQL re-evalúa la condición y excluye al ya desactivado.
+5. Git (sin commit ni push):
+   - Retirados del índice con `git rm --cached` (archivos locales intactos):
+     `node_modules/` (80.417 archivos), `apps/api/src/generated/prisma/`
+     (36), `apps/api/tsconfig.build.tsbuildinfo` y
+     `Solaluminios-auth-step2.zip` (copia antigua del módulo de auth; se
+     revisó y no contiene secretos). Quedan 127 archivos versionados.
+   - `.gitignore` raíz cubre esos patrones (+ `*.zip`, `.env*`); verificado
+     con `git check-ignore`.
+   - Historial: ningún `.env` real se versionó nunca. Búsqueda de URLs con
+     contraseña, `JWT_SECRET` con valor y contraseñas literales en todos los
+     commits (sin node_modules): solo aparece la línea de ejemplo de
+     `apps/api/.env.example`, que es el marcador `USUARIO:CONTRASENA`
+     (comprobado por comparación exacta). No se encontraron credenciales.
+   - Tras clonar de nuevo el repo hay que ejecutar
+     `pnpm --dir apps/api exec prisma generate` (el cliente ya no se versiona).
+   - Nota: el API que corría en el puerto 3000 (proceso del desarrollador)
+     no tenía el cambio de `operationKey` y respondió 400; las pruebas de
+     navegador se hicieron con API en 3101 y web en 5174 (`api-alt`,
+     `web-alt`). Reiniciar ese proceso para usar el código actual.
+
+### Pruebas ejecutadas
+- API: build y lint OK; `pnpm test` 8/8; e2e 47/47 en 7 archivos
+  (inventory-batch 10, security 6); `pnpm test:isolated` 2/2.
+- Web: build y lint OK; navegador según los puntos 2 y 3.
+- Datos temporales borrados por ID (2 usuarios, 3 paquetes, 3 movimientos,
+  acabado y ubicaciones `E2E-UI-*`). En la BD de desarrollo siguen los 6
+  paquetes del usuario Wetracking (hoy con 7 movimientos: una salida suya a
+  las 11:18), no tocados.
+
+### Recomendaciones (no implementadas)
+- HTTPS en producción. Lo probado aquí es HTTP local (localhost), que el
+  navegador trata como contexto seguro; no equivale a un despliegue con
+  HTTPS. Las tablets en la LAN por `http://IP` no son contexto seguro (por
+  eso el respaldo de UUID) y el token viajaría sin cifrar.
+- Revocación por token (p. ej. versión de sesión en el JWT) solo si se
+  necesita cortar un token concreto sin desactivar la cuenta, o evitar que
+  una reactivación revalide tokens previos. Requeriría migración; no se hizo.
+- Contador de intentos de login y throttler compartidos si hay varias
+  instancias; paginar el resumen en SQL; limitar concurrencia de scrypt;
+  health público sin BD; `HOST` configurable; fallar el build web sin
+  `VITE_API_URL`.
+- Hacer commit del des-versionado en un commit propio y revisar que nadie
+  dependa del cliente Prisma versionado.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

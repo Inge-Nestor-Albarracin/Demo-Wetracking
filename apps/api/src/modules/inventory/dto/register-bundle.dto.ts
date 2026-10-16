@@ -1,16 +1,21 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { ArrivalDatePrecision } from '../../../generated/prisma/client.js';
 
@@ -104,4 +109,29 @@ export class RegisterBundleDto {
   @IsString()
   @MaxLength(500)
   notes?: string | null;
+}
+
+// Upper bound of bundles saved in one batch (one transaction).
+export const MAX_BATCH_SIZE = 50;
+
+// Final save of the registration queue.
+// Retry contract: the client generates one UUID per list and resends the same
+// key if the response is lost. Same key + equivalent list returns the saved
+// result (200, replayed) without creating anything; same key with a different
+// list is rejected (409).
+export class RegisterBundleBatchDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsUUID('all', { message: 'operationKey debe ser un UUID generado por el cliente' })
+  operationKey!: string;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'La lista de paquetes está vacía' })
+  @ArrayMaxSize(MAX_BATCH_SIZE, {
+    message: `Máximo ${MAX_BATCH_SIZE} paquetes por guardado`,
+  })
+  @ValidateNested({ each: true })
+  @Type(() => RegisterBundleDto)
+  bundles!: RegisterBundleDto[];
 }

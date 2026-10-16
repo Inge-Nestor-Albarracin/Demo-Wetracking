@@ -1,6 +1,8 @@
-import { useState, type ComponentType, type SVGProps } from 'react'
+import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
 import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan } from './components/icons'
+import { LogoutDialog } from './components/LogoutDialog'
+import { useRegistrationQueue } from './lib/registrationQueue'
 import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
 import { BundleDetailView } from './views/BundleDetailView'
 import { BundlesView } from './views/BundlesView'
@@ -36,6 +38,24 @@ function initials(name: string) {
 function Workspace() {
   const { user, logout } = useSession()
   const operator = canOperate(user?.role)
+  // Pending registration list (not saved yet), shared by the register view,
+  // the menu badge and the logout prompt.
+  const queue = useRegistrationQueue(user?.id ?? 'anonymous')
+  const pending = queue.items.length
+  const [logoutPrompt, setLogoutPrompt] = useState(false)
+
+  // Closing or reloading the tab with unsaved bundles asks for confirmation.
+  useEffect(() => {
+    if (pending === 0) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [pending])
+
+  const requestLogout = () => (pending > 0 ? setLogoutPrompt(true) : logout())
   const [view, setView] = useState<View>(operator ? { name: 'register' } : { name: 'lookup' })
   // Remount register/bundles when they receive initial values (EPC, filters).
   const [remountKey, setRemountKey] = useState(0)
@@ -69,6 +89,12 @@ function Workspace() {
         >
           <Icon />
           <span>{variant === 'bottom' ? tab.short : tab.label}</span>
+          {tab.name === 'register' && pending > 0 ? (
+            <span className="nav-badge" title={`${pending} paquetes sin guardar`}>
+              {pending}
+              <span className="sr-only"> sin guardar</span>
+            </span>
+          ) : null}
         </button>
       )
     })
@@ -97,7 +123,7 @@ function Workspace() {
             <strong>{user?.name}</strong>
             <small>{user ? ROLE_LABELS[user.role] : ''}</small>
           </span>
-          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => logout()}>
+          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={requestLogout}>
             <IconLogout />
           </button>
         </div>
@@ -117,7 +143,7 @@ function Workspace() {
             <small>{user ? ROLE_LABELS[user.role] : ''}</small>
           </span>
           <span className="avatar" aria-hidden="true">{initials(user?.name ?? '')}</span>
-          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => logout()}>
+          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={requestLogout}>
             <IconLogout />
           </button>
         </div>
@@ -126,7 +152,7 @@ function Workspace() {
 
       <main className="content">
         {view.name === 'register' ? (
-          <RegisterBundleView key={remountKey} initialEpc={view.epc} navigate={navigate} />
+          <RegisterBundleView key={remountKey} initialEpc={view.epc} navigate={navigate} queue={queue} />
         ) : null}
         {view.name === 'lookup' ? <LookupView navigate={navigate} /> : null}
         {view.name === 'bundles' ? (
@@ -137,6 +163,23 @@ function Workspace() {
       </main>
 
       <nav className="nav-bottom" aria-label="Secciones">{navButtons('bottom')}</nav>
+
+      {logoutPrompt ? (
+        <LogoutDialog
+          pending={pending}
+          canKeep={queue.status !== 'unavailable'}
+          onCancel={() => setLogoutPrompt(false)}
+          onReview={() => {
+            setLogoutPrompt(false)
+            navigate({ name: 'register' })
+          }}
+          onKeep={() => logout()}
+          onDiscard={() => {
+            queue.clear()
+            logout()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

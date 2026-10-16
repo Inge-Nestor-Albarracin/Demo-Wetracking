@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,11 +11,13 @@ import { PrismaService } from '../../infrastructure/database/prisma.service.js';
 import type { SafeUser } from '../auth/auth.types.js';
 import {
   EPC_PATTERN,
+  MAX_BATCH_SIZE,
   normalizeEpc,
   type RegisterBundleDto,
 } from './dto/register-bundle.dto.js';
 import {
   bundleDetailInclude,
+  bundleListInclude,
   requireActiveRackInLocation,
   type Tx,
 } from './inventory.shared.js';
@@ -39,60 +42,232 @@ export class InventoryService {
   async registerBundle(dto: RegisterBundleDto, user: SafeUser) {
     const arrival = this.parseArrival(dto);
 
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        await this.requireNewEpc(tx, dto.epc);
-        await this.requireActiveReference(tx, dto.referenceId);
-        await this.requireActiveFinish(tx, dto.finishId);
-        await requireActiveRackInLocation(
-          tx,
-          dto.rackId,
-          dto.inventoryLocationId,
-        );
-
-        const registeredAt = new Date();
-        const bundle = await tx.bundle.create({
-          data: {
-            epc: dto.epc,
-            referenceId: dto.referenceId,
-            finishId: dto.finishId,
-            quantity: dto.quantity,
-            inventoryLocationId: dto.inventoryLocationId,
-            rackId: dto.rackId,
-            ...arrival,
-            notes: dto.notes || null,
-          },
-        });
-
-        await tx.inventoryMovement.create({
-          data: {
-            bundleId: bundle.id,
-            type: dto.registrationType,
-            quantity: dto.quantity,
-            quantityBefore: 0,
-            quantityAfter: dto.quantity,
-            destinationLocationId: dto.inventoryLocationId,
-            destinationRackId: dto.rackId,
-            occurredAt: registeredAt,
-            performedById: user.id,
-            operationKey: `bundle-registration:${randomUUID()}`,
-          },
-        });
-
+    return this.withUniqueEpc(() =>
+      this.prisma.$transaction(async (tx) => {
+        const id = await this.createBundle(tx, dto, arrival, user, new Date());
         return tx.bundle.findUniqueOrThrow({
-          where: { id: bundle.id },
+          where: { id },
           include: bundleDetailInclude,
         });
+      }),
+    );
+  }
+
+  // Final save of the registration queue: every bundle and its first
+  // movement are created in ONE transaction, so either all of them are
+  // saved or none is. Errors name the item (1-based) that failed.
+  //
+  // Idempotency: movement n gets operationKey `bundle-batch:<key>:<n>` (the
+  // existing unique column). If the transaction committed but the response
+  // was lost, the retry finds those movements and returns the saved result
+  // instead of reporting the EPCs as "already registered".
+  async registerBundles(
+    dtos: RegisterBundleDto[],
+    operationKey: string,
+    user: SafeUser,
+  ) {
+    const keys = dtos.map((_, index) => batchMovementKey(operationKey, index));
+    const replay = await this.replayBatch(operationKey, dtos, user);
+    if (replay) return replay;
+
+    const seen = new Map<string, number>();
+    dtos.forEach((dto, index) => {
+      const first = seen.get(dto.epc);
+      if (first !== undefined) {
+        throw itemError(
+          new BadRequestException(
+            `El EPC está repetido en la lista (también en el paquete ${first + 1})`,
+          ),
+          index,
+          dto.epc,
+        );
+      }
+      seen.set(dto.epc, index);
+    });
+
+    const arrivals = dtos.map((dto, index) => {
+      try {
+        return this.parseArrival(dto);
+      } catch (error) {
+        throw itemError(error, index, dto.epc);
+      }
+    });
+
+    // Report every already-registered EPC at once, before writing anything.
+    const existing = await this.prisma.bundle.findMany({
+      where: { epc: { in: dtos.map((dto) => dto.epc) } },
+      select: { epc: true },
+    });
+    if (existing.length > 0) {
+      // A concurrent retry with this key may have committed in between.
+      const committed = await this.replayBatch(operationKey, dtos, user);
+      if (committed) return committed;
+      throw new ConflictException({
+        statusCode: 409,
+        message: `Ya existen paquetes con estos EPC: ${existing.map((b) => b.epc).join(', ')}`,
+        error: 'Conflict',
+        epcs: existing.map((b) => b.epc),
       });
+    }
+
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const registeredAt = new Date();
+          const ids: string[] = [];
+          for (const [index, dto] of dtos.entries()) {
+            try {
+              ids.push(
+                await this.createBundle(tx, dto, arrivals[index], user, registeredAt, keys[index]),
+              );
+            } catch (error) {
+              throw itemError(error, index, dto.epc);
+            }
+          }
+          return { replayed: false, ...(await this.listInOrder(tx, ids)) };
+        },
+        { maxWait: 10000, timeout: 60000 },
+      );
     } catch (error: unknown) {
-      // A concurrent request with the same EPC committed first.
+      // Unique violation (EPC or operationKey): a concurrent request won.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const committed = await this.replayBatch(operationKey, dtos, user);
+        if (committed) return committed;
+        throw new ConflictException('Ya existe un paquete con ese EPC');
+      }
+      throw error;
+    }
+  }
+
+  // Returns the stored result when this key was already saved with an
+  // equivalent list; rejects the key if it was used for different content.
+  private async replayBatch(
+    operationKey: string,
+    dtos: RegisterBundleDto[],
+    user: SafeUser,
+  ) {
+    const movements = await this.prisma.inventoryMovement.findMany({
+      where: {
+        operationKey: {
+          in: Array.from({ length: MAX_BATCH_SIZE }, (_, index) =>
+            batchMovementKey(operationKey, index),
+          ),
+        },
+      },
+      include: { bundle: true },
+    });
+    if (movements.length === 0) return null;
+
+    const byKey = new Map(movements.map((m) => [m.operationKey, m]));
+    const equivalent =
+      movements.length === dtos.length &&
+      dtos.every((dto, index) => {
+        const movement = byKey.get(batchMovementKey(operationKey, index));
+        if (!movement) return false;
+        let arrival: ArrivalData;
+        try {
+          arrival = this.parseArrival(dto);
+        } catch {
+          return false;
+        }
+        const bundle = movement.bundle;
+        return (
+          movement.performedById === user.id &&
+          movement.type === dto.registrationType &&
+          movement.quantity === dto.quantity &&
+          movement.destinationLocationId === dto.inventoryLocationId &&
+          movement.destinationRackId === dto.rackId &&
+          bundle.epc === dto.epc &&
+          bundle.referenceId === dto.referenceId &&
+          bundle.finishId === dto.finishId &&
+          bundle.arrivalDatePrecision === arrival.arrivalDatePrecision &&
+          bundle.arrivalDate?.getTime() === arrival.arrivalDate?.getTime() &&
+          bundle.arrivalYear === arrival.arrivalYear &&
+          bundle.arrivalMonth === arrival.arrivalMonth &&
+          (bundle.notes ?? null) === (dto.notes || null)
+        );
+      });
+    if (!equivalent) {
+      throw new ConflictException(
+        'La clave de guardado ya se usó con otra lista de paquetes',
+      );
+    }
+
+    const ids = dtos.map(
+      (_, index) => byKey.get(batchMovementKey(operationKey, index))!.bundleId,
+    );
+    return { replayed: true, ...(await this.listInOrder(this.prisma, ids)) };
+  }
+
+  private async listInOrder(client: Tx, ids: string[]) {
+    const bundles = await client.bundle.findMany({
+      where: { id: { in: ids } },
+      include: bundleListInclude,
+    });
+    const order = new Map(ids.map((id, index) => [id, index]));
+    bundles.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    return { count: bundles.length, bundles };
+  }
+
+  private async createBundle(
+    tx: Tx,
+    dto: RegisterBundleDto,
+    arrival: ArrivalData,
+    user: SafeUser,
+    registeredAt: Date,
+    operationKey = 'bundle-registration:' + randomUUID(),
+  ): Promise<string> {
+    await this.requireNewEpc(tx, dto.epc);
+    await this.requireActiveReference(tx, dto.referenceId);
+    await this.requireActiveFinish(tx, dto.finishId);
+    await requireActiveRackInLocation(tx, dto.rackId, dto.inventoryLocationId);
+
+    const bundle = await tx.bundle.create({
+      data: {
+        epc: dto.epc,
+        referenceId: dto.referenceId,
+        finishId: dto.finishId,
+        quantity: dto.quantity,
+        inventoryLocationId: dto.inventoryLocationId,
+        rackId: dto.rackId,
+        ...arrival,
+        notes: dto.notes || null,
+      },
+      select: { id: true },
+    });
+
+    await tx.inventoryMovement.create({
+      data: {
+        bundleId: bundle.id,
+        type: dto.registrationType,
+        quantity: dto.quantity,
+        quantityBefore: 0,
+        quantityAfter: dto.quantity,
+        destinationLocationId: dto.inventoryLocationId,
+        destinationRackId: dto.rackId,
+        occurredAt: registeredAt,
+        performedById: user.id,
+        operationKey,
+      },
+    });
+
+    return bundle.id;
+  }
+
+  // A concurrent request with the same EPC committed first.
+  private async withUniqueEpc<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
         throw new ConflictException('Ya existe un paquete con ese EPC');
       }
-
       throw error;
     }
   }
@@ -226,6 +401,25 @@ export class InventoryService {
     if (!finish) throw new NotFoundException('El color no existe');
     if (!finish.active) throw new BadRequestException('El color está inactivo');
   }
+}
+
+// Prefixes an HTTP error with the queue position of the failing bundle.
+function itemError(error: unknown, index: number, epc: string): unknown {
+  if (!(error instanceof HttpException)) return error;
+  const status = error.getStatus();
+  return new HttpException(
+    {
+      statusCode: status,
+      message: `Paquete ${index + 1} (EPC ${epc}): ${error.message}`,
+      itemIndex: index,
+    },
+    status,
+  );
+}
+
+// Initial-movement key of item n in a batch saved with the client key.
+function batchMovementKey(operationKey: string, index: number): string {
+  return 'bundle-batch:' + operationKey + ':' + index;
 }
 
 function todayIn(timeZone: string): string {

@@ -1734,3 +1734,265 @@ tr.subrow td:first-child {
     white-space: nowrap;
   }
 }
+
+/* ==========================================================================
+   Registration queue ("Guardar y continuar" → "Guardar definitivo")
+   ========================================================================== */
+
+.queue-panel {
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--focus);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.queue-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.queue-head .eyebrow {
+  margin-bottom: 6px;
+}
+
+.queue-head h2 {
+  font: normal 22px/1.15 var(--serif);
+}
+
+.queue-head h2 small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font: 12px/1.4 var(--sans);
+}
+
+.queue-clear-confirm {
+  display: flex;
+  gap: 12px;
+}
+
+.text-button.danger {
+  color: var(--danger);
+}
+
+.queue-panel > .notice {
+  margin: 14px 18px 0;
+}
+
+.saved-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.notice-actions {
+  margin-top: 10px;
+}
+
+.queue-empty {
+  padding: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.queue-list {
+  max-height: 340px;
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.queue-item:last-child {
+  border-bottom: 0;
+}
+
+.queue-item.problem {
+  background: var(--error-bg);
+  box-shadow: inset 4px 0 0 var(--error-border);
+}
+
+.queue-index {
+  padding-top: 2px;
+  color: var(--focus);
+  font: 13px/1.4 var(--mono);
+}
+
+.queue-info {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.queue-info strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.queue-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.queue-remove {
+  width: 36px;
+  height: 36px;
+  color: var(--muted);
+}
+
+.queue-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--error-bg);
+}
+
+.queue-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.queue-footer {
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.queue-save {
+  width: 100%;
+}
+
+/* Pending list: always visible that it is NOT saved yet. */
+.pending-banner {
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border: 1px solid var(--warning-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+
+@media (max-width: 1023px) {
+  .pending-banner {
+    top: 120px;
+  }
+}
+
+@media (max-width: 760px) {
+  .pending-banner {
+    top: 70px;
+  }
+}
+
+.badge-warning {
+  margin-left: 10px;
+  background: var(--warning-bg);
+  color: #7a5a12;
+  border: 1px solid var(--warning-border);
+  vertical-align: middle;
+  font-family: var(--sans);
+}
+
+.queue-conflict {
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.notice-detail {
+  margin-top: 8px;
+}
+
+.nav-side-item,
+.nav-top-item,
+.nav-bottom-item {
+  position: relative;
+}
+
+.nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #e0a526;
+  color: #1d1400;
+  font: 700 11px/1 var(--mono);
+}
+
+.nav-bottom-item .nav-badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 22px);
+  margin: 0;
+}
+
+/* Modal dialog (logout with pending list). */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #0a243d99;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-top: 4px solid var(--warning-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 20px 50px -20px #0a243d;
+}
+
+.dialog h2 {
+  margin-bottom: 10px;
+  font: normal 24px/1.2 var(--serif);
+}
+
+.dialog p {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dialog-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.dialog-actions .text-button {
+  justify-self: center;
+  margin-top: 4px;
+}

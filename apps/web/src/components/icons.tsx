@@ -56,3 +56,12 @@ export const IconProfile = (p: P) => (
     <path d="M6 42h38" />
   </svg>
 )
+export const IconTasks = (p: P) => (
+  <Icon {...p}><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5" /></Icon>
+)
+export const IconClock = (p: P) => (
+  <Icon {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Icon>
+)
+export const IconUser = (p: P) => (
+  <Icon {...p}><circle cx="12" cy="8.5" r="3.5" /><path d="M5 20c1.2-3.6 3.9-5.5 7-5.5s5.8 1.9 7 5.5" /></Icon>
+)

@@ -7,9 +7,10 @@ import { LocationsModule } from './modules/locations/locations.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { InventoryModule } from './modules/inventory/inventory.module.js';
+import { TasksModule } from './modules/tasks/tasks.module.js';
 
 @Module({
-  imports: [DatabaseModule,AuthModule,CatalogModule,LocationsModule,UsersModule,InventoryModule,],
+  imports: [DatabaseModule,AuthModule,CatalogModule,LocationsModule,UsersModule,InventoryModule,TasksModule,],
   controllers: [AppController],
   providers: [AppService],
   

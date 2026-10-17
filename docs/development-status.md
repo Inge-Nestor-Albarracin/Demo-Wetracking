@@ -91,6 +91,11 @@ equipo. El proyecto local completo no fue inspeccionado desde ChatGPT.
 | POST | /inventory/bundles/:id/exit | Salida (ADMIN, WAREHOUSE) |
 | POST | /inventory/bundles/:id/transfer | Traslado del paquete completo (ADMIN, WAREHOUSE) |
 | POST | /inventory/bundles/:id/adjustments | Ajuste con motivo (ADMIN) |
+| POST | /inventory/bundles/batch | Guardado definitivo de la lista (ADMIN, WAREHOUSE) |
+| GET/POST | /tasks | Tareas: listar por estado / crear o asignar |
+| GET | /tasks/summary | Conteos de tareas |
+| GET | /tasks/:id | Detalle de tarea |
+| PATCH | /tasks/:id/complete | Completar (solo la persona asignada) |
 | GET/POST | /locations/branches | Sucursales |
 | GET | /locations/branches/:branchId/inventory-locations | Bodegas/almacenes |
 | POST | /locations/inventory-locations | Crear bodega/almacén |
@@ -704,6 +709,83 @@ más abajo, que corrige la nota sobre tokens y resuelve el des-versionado.
 - Hacer commit del des-versionado en un commit propio y revisar que nadie
   dependa del cliente Prisma versionado.
 
+## Módulo de tareas (16/10/2026)
+
+### Decisiones
+- "Jefe" = rol ADMIN (único con autoridad sobre otros usuarios; no se creó
+  un rol nuevo). Coincide con project-context: "el usuario programa las
+  propias; el administrador asigna".
+- Cualquier rol (ADMIN, WAREHOUSE, SALES, READ_ONLY) crea tareas para sí.
+  Solo ADMIN asigna a otra persona activa. El creador sale de la sesión.
+- Solo la persona asignada marca la tarea como completada (ni siquiera el
+  ADMIN que la asignó). Completar dos veces no cambia nada.
+- "Si vence sin completarse se elimina pero queda en incompletas": la tarea
+  NO se borra; sale de pendientes y aparece en Incompletas. El estado se
+  calcula con el reloj del servidor en cada consulta (sin trabajos
+  programados): completed si completedAt; incomplete si dueAt ≤ ahora sin
+  completar; pending en otro caso. Una tarea vencida ya no se puede
+  completar (409) y la BD lo garantiza con CHECK.
+- Vencimiento con fecha y hora; el API exige zona horaria explícita y el
+  frontend envía hora de Bogotá (-05:00, sin horario de verano). Mínimo 1 min
+  en el futuro, máximo 366 días.
+
+### Base de datos — migración nueva `20261016174032_tasks`
+- Solo crea la tabla `tasks` (id, title, description, dueAt, assigneeId,
+  createdById, completedAt, createdAt, updatedAt), índices y FK a `users`
+  (RESTRICT). No modifica tablas ni datos existentes.
+- CHECK añadidos a mano: `tasks_title_not_blank`,
+  `tasks_due_after_creation`, `tasks_completed_before_due`.
+- Generada con `prisma migrate dev --create-only`, SQL revisado, aplicada con
+  `prisma migrate deploy` a la BD de desarrollo y a la base aislada.
+
+### API (`src/modules/tasks`)
+| Método | Ruta | Permiso / reglas |
+| --- | --- | --- |
+| POST | /tasks | Todos. `{ title, description?, dueAt, assigneeId? }`; assigneeId de otra persona solo ADMIN (403) |
+| GET | /tasks?status=pending\|completed\|incomplete&assigneeId&page&pageSize | Empleado: solo las suyas (assigneeId ajeno → 403). ADMIN: todo el equipo o una persona |
+| GET | /tasks/summary?assigneeId | pending, dueSoon (24 h), completed, incomplete |
+| GET | /tasks/:id | Asignado, creador o ADMIN; si no, 404 |
+| PATCH | /tasks/:id/complete | Solo el asignado; vencida → 409; actualización condicional atómica |
+
+Orden: pendientes por vencimiento ascendente; completadas por fecha de
+completado; incompletas por vencimiento descendente. Personas expuestas
+solo con id, nombre y rol.
+
+### Web
+- Menú "Tareas" para todos los roles, con contador de pendientes (se
+  actualiza cada minuto).
+- Indicadores: Pendientes, Vencen en 24 h, Completadas, Incompletas.
+- Pestañas Pendientes (agrupadas por día: Hoy, Mañana, días de la semana y
+  "Más adelante"), Completadas e Incompletas.
+- ADMIN: filtro "Persona" y formulario "Crear y asignar" con "Asignar a".
+  Empleado: formulario "Programar una tarea" sin asignación.
+- Marcar completada con confirmación (solo en tareas propias pendientes). La
+  lista se refresca cada minuto; una tarea que vence en pantalla se marca
+  "Vencida", pierde el botón y pasa a Incompletas.
+- Archivos: `views/TasksView.tsx`, `components/TaskCard.tsx`,
+  `components/TaskForm.tsx`, `lib/tasks.ts`, `lib/useNow.ts`, iconos,
+  estilos en `App.css`, menú en `App.tsx`. KPIs en 2 columnas hasta 340 px.
+
+### Pruebas
+- e2e `test/tasks.e2e-spec.ts` 9/9: creación propia por los 3 roles no
+  ADMIN, asignación solo ADMIN (403/400 inactivo/404), validaciones (título,
+  pasado, <1 min, sin zona horaria → 400, >366 días, campos extra), visibilidad
+  (empleado solo las suyas, 404 ajena, ADMIN todas/filtro), completar solo el
+  asignado + idempotente + concurrente, vencida → incompletas y 409, una tarea
+  que vence en 1,5 s pasa sola a incompletas, conteos = listas, CHECK de BD,
+  401. La prueba detectó y se corrigió: se aceptaba dueAt sin zona horaria.
+- Suite completa: unit 8/8, e2e 56/56 (8 archivos), aislada 2/2; web build y
+  lint OK.
+- Navegador (API 3101, web 5174, usuarios temporales): la jefa asignó una
+  tarea (sin botón completar para ella); el empleado la vio, sin selector de
+  asignación, creó una propia y completó la asignada con confirmación; la
+  tarea vencida aparece en Incompletas; una tarea que vencía a los 20 s salió
+  sola de pendientes y quedó en Incompletas sin recargar; móvil 375 px sin
+  desbordamiento. Se corrigió el desbordamiento de las pestañas.
+- Datos temporales borrados (4 tareas, 2 usuarios). BD: 0 tareas.
+- El API del desarrollador en el puerto 3000 debe reiniciarse para cargar el
+  módulo de tareas (la migración ya está aplicada).
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean
@@ -719,7 +801,9 @@ más abajo, que corrige la nota sobre tokens y resuelve el des-versionado.
    almacén, motivo obligatorio en salidas.
 7. Empresas/contactos, cotizador, orden y relación con despacho (siguiente
    bloque).
-8. Tareas semanales, usuarios propios y asignación administrativa.
+8. ~~Tareas: propias, asignación por ADMIN, completar, vencimiento →
+   incompletas~~ (hecho 16/10/2026). Pendiente de negocio: recurrencia,
+   editar/cancelar tareas, reabrir o prorrogar una incompleta, notificaciones.
 9. Importación conciliada, pruebas con el lector UHF real, despliegue y
    capacitación.
 

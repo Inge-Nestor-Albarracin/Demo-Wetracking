@@ -5,6 +5,7 @@ export type View =
   | { name: 'lookup' }
   | { name: 'bundles'; catalog?: Partial<CatalogValue> }
   | { name: 'summary' }
+  | { name: 'tasks' }
   | { name: 'bundle'; id: string }
 
 export type Navigate = (view: View) => void

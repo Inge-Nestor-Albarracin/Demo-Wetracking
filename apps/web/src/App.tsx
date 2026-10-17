@@ -1,8 +1,10 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
-import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan } from './components/icons'
+import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan, IconTasks } from './components/icons'
 import { LogoutDialog } from './components/LogoutDialog'
 import { useRegistrationQueue } from './lib/registrationQueue'
+import type { TaskSummary } from './lib/tasks'
+import { useLoad } from './lib/useLoad'
 import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
 import { BundleDetailView } from './views/BundleDetailView'
 import { BundlesView } from './views/BundlesView'
@@ -11,6 +13,7 @@ import { LookupView } from './views/LookupView'
 import type { View } from './views/navigation'
 import { RegisterBundleView } from './views/RegisterBundleView'
 import { SummaryView } from './views/SummaryView'
+import { TasksView } from './views/TasksView'
 
 function App() {
   const { user } = useSession()
@@ -55,6 +58,15 @@ function Workspace() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [pending])
 
+  // Pending tasks for the menu badge, refreshed every minute.
+  const taskSummary = useLoad<TaskSummary>('/tasks/summary')
+  const { reload: reloadTaskSummary } = taskSummary
+  useEffect(() => {
+    const id = window.setInterval(reloadTaskSummary, 60_000)
+    return () => window.clearInterval(id)
+  }, [reloadTaskSummary])
+  const openTasks = taskSummary.data?.pending ?? 0
+
   const requestLogout = () => (pending > 0 ? setLogoutPrompt(true) : logout())
   const [view, setView] = useState<View>(operator ? { name: 'register' } : { name: 'lookup' })
   // Remount register/bundles when they receive initial values (EPC, filters).
@@ -71,6 +83,7 @@ function Workspace() {
     { name: 'lookup', label: 'Consultar chip', short: 'Chip', icon: IconScan },
     { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
     { name: 'summary', label: 'Resumen', short: 'Resumen', icon: IconChart },
+    { name: 'tasks', label: 'Tareas', short: 'Tareas', icon: IconTasks },
   ]
   // The bundle detail belongs to the section the user came from; highlight lookup.
   const current = view.name === 'bundle' ? 'lookup' : view.name
@@ -93,6 +106,12 @@ function Workspace() {
             <span className="nav-badge" title={`${pending} paquetes sin guardar`}>
               {pending}
               <span className="sr-only"> sin guardar</span>
+            </span>
+          ) : null}
+          {tab.name === 'tasks' && openTasks > 0 ? (
+            <span className="nav-badge nav-badge-info" title={`${openTasks} tareas pendientes`}>
+              {openTasks}
+              <span className="sr-only"> pendientes</span>
             </span>
           ) : null}
         </button>
@@ -159,6 +178,7 @@ function Workspace() {
           <BundlesView key={remountKey} navigate={navigate} initialCatalog={view.catalog} />
         ) : null}
         {view.name === 'summary' ? <SummaryView navigate={navigate} /> : null}
+        {view.name === 'tasks' ? <TasksView onChanged={reloadTaskSummary} /> : null}
         {view.name === 'bundle' ? <BundleDetailView key={view.id} id={view.id} navigate={navigate} /> : null}
       </main>
 

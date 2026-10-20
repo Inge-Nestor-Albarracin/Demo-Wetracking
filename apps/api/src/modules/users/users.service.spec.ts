@@ -45,3 +45,39 @@ describe('UsersService.setActive', () => {
     await expect(service.setActive('admin-1', false, 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+describe('UsersService.setRole', () => {
+  const build = (activeAdminIds: string[]) => {
+    const update = vi.fn(async ({ where, data }: { where: { id: string }; data: { role: string } }) => ({
+      id: where.id,
+      role: data.role,
+    }));
+    const tx = {
+      $queryRaw: vi.fn(async () => activeAdminIds.map((id) => ({ id }))),
+      user: { update },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+    } as unknown as PrismaService;
+    return { service: new UsersService(prisma), tx, update };
+  };
+
+  it('refuses to demote the last active administrator', async () => {
+    const { service, update } = build(['admin-1']);
+    await expect(service.setRole('admin-1', 'WAREHOUSE', 'admin-2')).rejects.toBeInstanceOf(BadRequestException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('demotes an admin when another active admin remains, and promotes freely', async () => {
+    const { service, tx } = build(['admin-1', 'admin-2']);
+    await expect(service.setRole('admin-1', 'SALES', 'admin-2')).resolves.toMatchObject({ role: 'SALES' });
+    await expect(service.setRole('user-9', 'ADMIN', 'admin-2')).resolves.toMatchObject({ role: 'ADMIN' });
+    // Promotion does not need to lock the admins.
+    expect(tx.$queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it('refuses changing your own role', async () => {
+    const { service } = build(['admin-1', 'admin-2']);
+    await expect(service.setRole('admin-1', 'READ_ONLY', 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
+  });
+});

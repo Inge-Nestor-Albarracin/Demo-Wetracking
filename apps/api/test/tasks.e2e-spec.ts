@@ -117,7 +117,7 @@ describe('Tasks (e2e)', () => {
     expect(mine.body.items.every((t: { assigneeId: string }) => t.assigneeId === ids.WAREHOUSE)).toBe(true);
     // Sorted by deadline, soonest first.
     const due = mine.body.items.map((t: { dueAt: string }) => t.dueAt);
-    expect([...due].sort()).toEqual(due);
+    expect([...due].sort((a: string, b: string) => a.localeCompare(b))).toEqual(due);
 
     await list(`?assigneeId=${ids.WAREHOUSE}`, 'SALES').expect(403);
     const warehouseTask = mine.body.items[0];

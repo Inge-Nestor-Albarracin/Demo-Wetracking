@@ -1,11 +1,12 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
-import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan, IconTasks } from './components/icons'
+import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
 import { LogoutDialog } from './components/LogoutDialog'
 import { useRegistrationQueue } from './lib/registrationQueue'
 import type { TaskSummary } from './lib/tasks'
 import { useLoad } from './lib/useLoad'
 import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
+import { AdminView } from './views/AdminView'
 import { BundleDetailView } from './views/BundleDetailView'
 import { BundlesView } from './views/BundlesView'
 import { LoginView } from './views/LoginView'
@@ -84,6 +85,8 @@ function Workspace() {
     { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
     { name: 'summary', label: 'Resumen', short: 'Resumen', icon: IconChart },
     { name: 'tasks', label: 'Tareas', short: 'Tareas', icon: IconTasks },
+    // UI hint only: the API enforces ADMIN on every admin endpoint.
+    ...(user?.role === 'ADMIN' ? [{ name: 'admin' as const, label: 'Administración', short: 'Admin', icon: IconSettings }] : []),
   ]
   // The bundle detail belongs to the section the user came from; highlight lookup.
   const current = view.name === 'bundle' ? 'lookup' : view.name
@@ -179,6 +182,7 @@ function Workspace() {
         ) : null}
         {view.name === 'summary' ? <SummaryView navigate={navigate} /> : null}
         {view.name === 'tasks' ? <TasksView onChanged={reloadTaskSummary} /> : null}
+        {view.name === 'admin' && user?.role === 'ADMIN' ? <AdminView /> : null}
         {view.name === 'bundle' ? <BundleDetailView key={view.id} id={view.id} navigate={navigate} /> : null}
       </main>
 

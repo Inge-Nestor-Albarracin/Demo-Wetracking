@@ -1,7 +1,7 @@
 import {
   BadRequestException, ConflictException, Injectable, NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client.js';
+import { Prisma, type UserRole } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/database/prisma.service.js';
 import { hashPassword } from '../../infrastructure/security/password.js';
 import type { CreateUserDto } from './dto/user.dto.js';
@@ -53,6 +53,33 @@ export class UsersService {
           }
         }
         return tx.user.update({ where: { id }, data: { active }, select: SAFE_SELECT });
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('El usuario no existe');
+      }
+      throw error;
+    }
+  }
+
+  // Changes take effect on the user's next request: the guard re-reads the
+  // role from the database every time.
+  async setRole(id: string, role: UserRole, actorId: string) {
+    if (id === actorId) {
+      throw new BadRequestException('No puedes cambiar tu propio rol');
+    }
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (role !== 'ADMIN') {
+          // Same lock as deactivation: concurrent demotions cannot leave the
+          // system without an active administrator.
+          const admins = await tx.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "users" WHERE role = 'ADMIN' AND active = true FOR UPDATE`;
+          if (admins.length === 1 && admins[0].id === id) {
+            throw new BadRequestException('No se puede quitar el rol al último administrador activo');
+          }
+        }
+        return tx.user.update({ where: { id }, data: { role }, select: SAFE_SELECT });
       });
     } catch (error: unknown) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {

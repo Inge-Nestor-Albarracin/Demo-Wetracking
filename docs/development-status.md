@@ -1,5 +1,42 @@
 # Estado de desarrollo
 
+## Auditoría de roles, permisos e IDOR (16/10/2026)
+
+- Informe: [roles-permissions-idor-audit.md](roles-permissions-idor-audit.md),
+  con matriz de permisos, evidencia HTTP, diferencias documentales y límites.
+- Roles: ADMIN, WAREHOUSE, SALES, READ_ONLY. BD local antes/después: 1 ADMIN
+  activo y 1 READ_ONLY inactivo; sin cuentas WAREHOUSE/SALES persistentes.
+- No se reprodujo IDOR de tareas ni elusión de permisos en los escenarios
+  probados. Tres pares de usuarios del mismo rol no pueden leer/completar
+  tareas ajenas (404), filtrar por otro asignado ni asignarle tareas (403).
+  ADMIN puede consultar tareas del equipo, pero solo completa las propias.
+- Hallazgo de alcance: inventario global, sin permisos por sucursal/bodega.
+  `defaultInventoryLocationId` no restringe acceso. Demostrado: WAREHOUSE con
+  predeterminada A registra, descuenta y traslada un paquete de B; todos los
+  roles leen B. Sería una brecha si el negocio exige aislamiento; esa regla
+  debe definirse antes de cambiar el contrato actual.
+- READ_ONLY sí crea/completa tareas propias; SALES tiene actualmente los
+  mismos permisos efectivos. Cotizador sin implementar. Administración de
+  usuarios/catálogos/ubicaciones disponible en API, sin UI de gestión completa.
+- Nuevo archivo: `apps/api/test/authorization-idor.e2e-spec.ts` (20 pruebas).
+  Sin cambios de código funcional, roles, endpoints, esquema o migraciones.
+- Ejecución: `pnpm.cmd --dir apps/api exec vitest run --config
+  ./vitest.config.e2e.ts test/authorization-idor.e2e-spec.ts
+  test/tasks.e2e-spec.ts test/security.e2e-spec.ts
+  test/inventory-batch.e2e-spec.ts test/inventory-operations.e2e-spec.ts
+  --no-file-parallelism` → 53/53. Unitarias API 8/8; build API/web OK;
+  lint API salida 0 con aviso previo `require-array-sort-compare` en
+  `test/tasks.e2e-spec.ts:120`; lint web OK. No se repitieron todos los e2e
+  ni la suite aislada. Comandos completos en el informe.
+- Pruebas con usuarios/objetos temporales, JWT del helper existente y guards
+  reales; sin alterar login ni cuentas reales. Limpieza por IDs; conteos
+  inicial/final iguales: 2 usuarios, 0 tareas, 10 paquetes, 11 movimientos,
+  1 sucursal, 1 ubicación, 1 pasillo, 1 burro, 2 referencias, 7 acabados y
+  1 familia. Los conteos antiguos en este documento son históricos.
+- Se conservaron los cambios previos del usuario. Sin commit, push o
+  despliegue realizados por esta auditoría. Pendiente: definir si se necesita
+  aislamiento por sede; no se verificó navegador ni servidor ya iniciado.
+
 ## Adaptación del login (14/10/2026)
 
 - Petición actual: adaptar `Login page diseño sobrio.zip` al acceso existente;
@@ -75,6 +112,7 @@ equipo. El proyecto local completo no fue inspeccionado desde ChatGPT.
 | GET | /auth/me | Usuario de sesión |
 | GET/POST | /users | Administración de usuarios (ADMIN) |
 | PATCH | /users/:id/active | Activar/desactivar por ADMIN |
+| PATCH | /users/:id/role | Cambiar rol por ADMIN (20/10/2026) |
 | GET | /health/database | Conexión BD, actualmente protegida |
 | GET/POST | /catalog/references | Referencias |
 | GET/PATCH | /catalog/references/:id | Consulta/actualización |
@@ -785,6 +823,44 @@ solo con id, nombre y rol.
 - Datos temporales borrados (4 tareas, 2 usuarios). BD: 0 tareas.
 - El API del desarrollador en el puerto 3000 debe reiniciarse para cargar el
   módulo de tareas (la migración ya está aplicada).
+
+## Administración: catálogo y usuarios (20/10/2026)
+
+Sin migraciones. Pantalla "Administración" (menú visible solo para ADMIN;
+el API exige ADMIN en todos estos endpoints).
+
+- Familias: buscar, crear (código en mayúsculas, no editable), renombrar,
+  activar/desactivar con confirmación (desactivar conserva sus referencias).
+  Usa `GET/POST /catalog/families` y `PATCH /catalog/families/:id`.
+- Referencias: buscar, filtrar por familia ("Sin familia") y estado; crear
+  con descripción y familia opcional; editar descripción y familia (quitarla
+  o cambiarla); activar/desactivar con confirmación. Lista filtrada en el
+  navegador, máximo 100 filas visibles. Usa los endpoints existentes de
+  `/catalog/references`. Los acabados no se administran aquí (se ajustaron
+  por SQL y no se deben renombrar).
+- Usuarios: buscar; crear con nombre, correo, contraseña inicial (mín. 12,
+  botón "Generar" con CSPRNG y muestreo por rechazo, se muestra una sola vez
+  tras crear) y rol con la descripción de sus permisos; cambiar rol con
+  confirmación; activar/desactivar. La fila propia no tiene controles.
+- API nuevo: `PATCH /users/:id/role` (ADMIN). Rechaza cambiar el propio rol
+  (400) y quitar el rol al último ADMIN activo (400, con el mismo
+  `SELECT … FOR UPDATE` que la desactivación). El guard relee el rol en cada
+  solicitud: el cambio aplica en la siguiente acción, sin nuevo login.
+- Pruebas: unit `users.service.spec.ts` 11/11 en total (3 nuevas de setRole);
+  e2e `test/users-admin.e2e-spec.ts` 3/3 (crear con rol y login, 409/400,
+  cambio de rol aplicado a la sesión existente, propio rol 400, no ADMIN 403,
+  401). Suite completa: e2e 79/79 en 10 archivos, aislada 2/2, web build y
+  lint OK. Navegador (API 3101, web 5174, ADMIN temporal): crear, renombrar,
+  duplicado 409 y desactivar/activar familia; crear, editar (quitar familia) y
+  desactivar referencia; crear usuario Ventas con contraseña generada, cambiar
+  a Bodega (verificado en BD: WAREHOUSE, hash scrypt); fila propia sin
+  controles; móvil 375 px sin desbordamiento (6 secciones de 61 px).
+- Datos temporales borrados por valor exacto (1 familia, 1 referencia, 2
+  usuarios). La cuenta inactiva `auth-test-…@example.invalid` es de
+  `Test-Auth.ps1` y no se tocó.
+- Pendiente: cambio y recuperación de contraseña; editar nombre/correo de
+  usuarios; la matriz de `roles-permissions-idor-audit.md` debería añadir
+  "cambiar rol (ADMIN)".
 
 ## Pendiente
 

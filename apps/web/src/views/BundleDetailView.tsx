@@ -36,6 +36,11 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
     },
     [reloadBundle, reloadHistory],
   )
+  // After a conflict or an uncertain result: show the current balance/history.
+  const onRefresh = useCallback(() => {
+    reloadBundle()
+    reloadHistory()
+  }, [reloadBundle, reloadHistory])
 
   if (bundle.error) {
     return (
@@ -107,7 +112,7 @@ export function BundleDetailView({ id, navigate }: { id: string; navigate: Navig
 
       <h2 className="subtitle">Operaciones</h2>
       <div className="card">
-        <OperationsPanel bundle={data} onDone={onDone} />
+        <OperationsPanel bundle={data} onDone={onDone} onRefresh={onRefresh} />
       </div>
 
       <h2 className="subtitle">Historial de movimientos</h2>

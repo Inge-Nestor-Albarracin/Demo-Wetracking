@@ -15,10 +15,21 @@ export function FamiliesAdmin() {
   const { request } = useSession()
   const families = useLoad<Family[]>('/catalog/families')
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+  const [editing, setEditing] = useState<{ id: string; name: string; version?: string } | null>(null)
   const [confirmToggle, setConfirmToggle] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const rowAction = useMutation()
+
+  // After a failed edit (e.g. 409: changed by someone else) show fresh data.
+  const runAndRefresh = async (action: () => Promise<unknown>) => {
+    const ok = await rowAction.run(action)
+    if (!ok) {
+      // Leave edit mode so the freshly loaded values are visible.
+      setEditing(null)
+      families.reload()
+    }
+    return ok
+  }
 
   const rows = (families.data ?? []).filter((f) => matches(`${f.code} ${f.name}`, search))
 
@@ -26,8 +37,11 @@ export function FamiliesAdmin() {
     if (!editing) return
     const name = editing.name.trim()
     if (!name) return rowAction.setError('El nombre no puede quedar vacío.')
-    const ok = await rowAction.run(() =>
-      request(`/catalog/families/${encodeURIComponent(editing.id)}`, { method: 'PATCH', body: { name } }),
+    const ok = await runAndRefresh(() =>
+      request(`/catalog/families/${encodeURIComponent(editing.id)}`, {
+        method: 'PATCH',
+        body: { name, expectedUpdatedAt: editing.version },
+      }),
     )
     if (ok) {
       setMessage(`Familia renombrada: ${name}.`)
@@ -37,10 +51,10 @@ export function FamiliesAdmin() {
   }
 
   const toggle = async (family: Family) => {
-    const ok = await rowAction.run(() =>
+    const ok = await runAndRefresh(() =>
       request(`/catalog/families/${encodeURIComponent(family.id)}`, {
         method: 'PATCH',
-        body: { active: !family.active },
+        body: { active: !family.active, expectedUpdatedAt: family.updatedAt },
       }),
     )
     setConfirmToggle(null)
@@ -140,7 +154,7 @@ export function FamiliesAdmin() {
                             className="text-button"
                             onClick={() => {
                               setConfirmToggle(null)
-                              setEditing({ id: family.id, name: family.name })
+                              setEditing({ id: family.id, name: family.name, version: family.updatedAt })
                             }}
                           >
                             Renombrar

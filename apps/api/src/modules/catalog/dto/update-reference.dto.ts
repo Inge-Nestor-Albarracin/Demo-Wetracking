@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -30,4 +31,10 @@ export class UpdateReferenceDto {
   @IsNotEmpty({ message: 'familyId no puede estar vacío' })
   @MaxLength(50)
   familyId?: string | null;
+
+  // Version the client edited (updatedAt it received). Optional: when sent,
+  // a newer change by someone else makes the API answer 409.
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsISO8601({ strict: true }, { message: 'expectedUpdatedAt debe ser la fecha updatedAt recibida' })
+  expectedUpdatedAt?: string;
 }

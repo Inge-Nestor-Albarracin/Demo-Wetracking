@@ -11,17 +11,31 @@ type Action = 'exit' | 'transfer' | 'adjustments'
 
 const REPLAYED = 'La operación ya estaba registrada; no se modificó el inventario otra vez.'
 
-// One operationKey per intended operation. It is kept while the request is
-// retried after a network or server error, so the API never applies it twice,
-// and discarded once the data changes, the API rejects it, or it succeeds.
-function useOperation(bundleId: string, onDone: (message: string) => void) {
+const KEY_REUSED = /clave de operación ya se usó/i
+
+// One operationKey per intended operation:
+// - success: discarded.
+// - definitive rejection (4xx such as "saldo insuficiente"): the key was not
+//   applied, so it is discarded.
+// - temporary (503 retryable): not applied; kept for the retry.
+// - uncertain (no response, 500): it may have been applied, so the key is kept
+//   EVEN IF the user edits the form. Resending with the same key is safe: the
+//   API replays it, or answers "ya se usó con otros datos" if the first
+//   attempt did go through with other values.
+// After any conflict or uncertain outcome the bundle is reloaded, so the
+// screen never keeps showing an old balance.
+function useOperation(bundleId: string, onDone: (message: string) => void, onRefresh: () => void) {
   const { request } = useSession()
   const key = useRef<string | null>(null)
+  const uncertain = useRef(false)
   const inFlight = useRef(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Called when the form data changes. While the previous result is
+  // uncertain, both the key and the warning stay until the API answers.
   const reset = useCallback(() => {
+    if (uncertain.current) return
     key.current = null
     setError(null)
   }, [])
@@ -39,15 +53,31 @@ function useOperation(bundleId: string, onDone: (message: string) => void) {
         body: { ...body, operationKey: key.current },
       })
       key.current = null
+      uncertain.current = false
       onDone(data.replayed ? REPLAYED : success(data))
       return true
     } catch (err) {
-      if (err instanceof ApiError && err.status >= 400 && err.status < 500) key.current = null
-      setError(
-        err instanceof ApiError && (err.status === 0 || err.status >= 500)
-          ? `${describeError(err)} Puedes reintentar: la operación no se aplicará dos veces.`
-          : describeError(err),
-      )
+      const status = err instanceof ApiError ? err.status : 0
+      const retryable = err instanceof ApiError && (err.data as { retryable?: boolean } | null)?.retryable === true
+      if (retryable) {
+        setError(`${describeError(err)} (No se aplicó.)`)
+      } else if (status === 0 || status >= 500) {
+        uncertain.current = true
+        setError(
+          'No se recibió una respuesta clara del servidor: la operación pudo haberse registrado. Revisa el historial y, si hace falta, reintenta; no se aplicará dos veces.',
+        )
+        onRefresh()
+      } else {
+        const wasApplied = uncertain.current && status === 409 && KEY_REUSED.test(describeError(err))
+        key.current = null
+        uncertain.current = false
+        setError(
+          wasApplied
+            ? 'La operación anterior sí se había registrado (con los datos de ese momento). Revisa el historial antes de repetirla.'
+            : describeError(err),
+        )
+        if (status === 409) onRefresh()
+      }
       return false
     } finally {
       inFlight.current = false
@@ -84,8 +114,8 @@ function Confirm({
   )
 }
 
-function ExitForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (message: string) => void }) {
-  const op = useOperation(bundle.id, onDone)
+function ExitForm({ bundle, onDone, onRefresh }: { bundle: BundleDetail; onDone: (message: string) => void; onRefresh: () => void }) {
+  const op = useOperation(bundle.id, onDone, onRefresh)
   const [quantity, setQuantity] = useState('')
   const [reason, setReason] = useState('')
   const [confirming, setConfirming] = useState(false)
@@ -146,8 +176,8 @@ function ExitForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (message: 
   )
 }
 
-function TransferForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (message: string) => void }) {
-  const op = useOperation(bundle.id, onDone)
+function TransferForm({ bundle, onDone, onRefresh }: { bundle: BundleDetail; onDone: (message: string) => void; onRefresh: () => void }) {
+  const op = useOperation(bundle.id, onDone, onRefresh)
   const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION)
   const [description, setDescription] = useState('')
   const [reason, setReason] = useState('')
@@ -210,8 +240,8 @@ function TransferForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (messa
   )
 }
 
-function AdjustmentForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (message: string) => void }) {
-  const op = useOperation(bundle.id, onDone)
+function AdjustmentForm({ bundle, onDone, onRefresh }: { bundle: BundleDetail; onDone: (message: string) => void; onRefresh: () => void }) {
+  const op = useOperation(bundle.id, onDone, onRefresh)
   const [type, setType] = useState<'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT'>('ADJUSTMENT_IN')
   const [quantity, setQuantity] = useState('')
   const [reason, setReason] = useState('')
@@ -282,7 +312,7 @@ function AdjustmentForm({ bundle, onDone }: { bundle: BundleDetail; onDone: (mes
   )
 }
 
-export function OperationsPanel({ bundle, onDone }: { bundle: BundleDetail; onDone: (message: string) => void }) {
+export function OperationsPanel({ bundle, onDone, onRefresh }: { bundle: BundleDetail; onDone: (message: string) => void; onRefresh: () => void }) {
   const { user } = useSession()
   const tabs: { id: Action; label: string }[] = []
   if (canOperate(user?.role)) {
@@ -316,9 +346,9 @@ export function OperationsPanel({ bundle, onDone }: { bundle: BundleDetail; onDo
         {empty && active !== 'adjustments' ? (
           <Notice kind="info">El paquete está agotado: no admite salidas ni traslados.</Notice>
         ) : null}
-        {active === 'exit' && !empty ? <ExitForm key={bundle.quantity} bundle={bundle} onDone={onDone} /> : null}
-        {active === 'transfer' && !empty ? <TransferForm bundle={bundle} onDone={onDone} /> : null}
-        {active === 'adjustments' ? <AdjustmentForm bundle={bundle} onDone={onDone} /> : null}
+        {active === 'exit' && !empty ? <ExitForm bundle={bundle} onDone={onDone} onRefresh={onRefresh} /> : null}
+        {active === 'transfer' && !empty ? <TransferForm bundle={bundle} onDone={onDone} onRefresh={onRefresh} /> : null}
+        {active === 'adjustments' ? <AdjustmentForm bundle={bundle} onDone={onDone} onRefresh={onRefresh} /> : null}
       </div>
     </div>
   )

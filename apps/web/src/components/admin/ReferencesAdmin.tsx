@@ -42,13 +42,32 @@ export function ReferencesAdmin() {
   )
   const rows = filtered.slice(0, MAX_ROWS)
 
+  // After a failed edit (e.g. 409: changed by someone else) show fresh data.
+  const runAndRefresh = async (action: () => Promise<unknown>) => {
+    const ok = await rowAction.run(action)
+    if (!ok) {
+      // Leave edit mode so the freshly loaded values are visible.
+      setEditing(null)
+      references.reload()
+    }
+    return ok
+  }
+
   const save = async () => {
     if (!editing) return
     const current = references.data?.find((r) => r.id === editing.id)
-    const body: Record<string, unknown> = { description: editing.description.trim() || null }
+    // Only the fields this admin changed, plus the version they saw: an edit
+    // made meanwhile by someone else is answered with 409, not overwritten.
+    const body: Record<string, unknown> = { expectedUpdatedAt: current?.updatedAt }
+    const description = editing.description.trim() || null
+    if ((current?.description ?? null) !== description) body.description = description
     // Omitted keeps the family, null removes it, an id sets it.
     if ((current?.familyId ?? '') !== editing.familyId) body.familyId = editing.familyId || null
-    const ok = await rowAction.run(() =>
+    if (body.description === undefined && body.familyId === undefined) {
+      setEditing(null)
+      return
+    }
+    const ok = await runAndRefresh(() =>
       request(`/catalog/references/${encodeURIComponent(editing.id)}`, { method: 'PATCH', body }),
     )
     if (ok) {
@@ -59,10 +78,10 @@ export function ReferencesAdmin() {
   }
 
   const toggle = async (reference: Reference) => {
-    const ok = await rowAction.run(() =>
+    const ok = await runAndRefresh(() =>
       request(`/catalog/references/${encodeURIComponent(reference.id)}`, {
         method: 'PATCH',
-        body: { active: !reference.active },
+        body: { active: !reference.active, expectedUpdatedAt: reference.updatedAt },
       }),
     )
     setConfirmToggle(null)

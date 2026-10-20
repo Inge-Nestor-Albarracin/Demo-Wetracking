@@ -21,6 +21,8 @@ export interface Family {
   code: string
   name: string
   active: boolean
+  // Version used for conflict-safe edits (expectedUpdatedAt).
+  updatedAt?: string
 }
 
 export interface Reference {
@@ -29,6 +31,7 @@ export interface Reference {
   description: string | null
   active: boolean
   familyId: string | null
+  updatedAt?: string
 }
 
 export interface Finish {

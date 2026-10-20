@@ -10,7 +10,8 @@ import type { UserRole } from '../../src/generated/prisma/client.js';
 import { PrismaService } from '../../src/infrastructure/database/prisma.service.js';
 import { hashPassword } from '../../src/infrastructure/security/password.js';
 
-// e2e tests run against the local database configured in apps/api/.env.
+// e2e tests run against the dedicated test database (TEST_DATABASE_URL),
+// enforced by test/support/worker-setup.ts and re-checked here.
 // They never use the real administrator: each test file creates temporary
 // users with a random, discarded password and signs their tokens in-process
 // with the application's JwtService. Tokens are never printed.
@@ -27,6 +28,14 @@ export async function createE2eApp(): Promise<INestApplication<App>> {
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
   await app.init();
+
+  // Defense in depth: never write unless connected to the expected test DB.
+  const expected = process.env.E2E_TEST_DATABASE_NAME;
+  const rows = await app.get(PrismaService).$queryRaw<{ current_database: string }[]>`SELECT current_database()`;
+  if (!expected || rows[0]?.current_database !== expected) {
+    await app.close();
+    throw new Error('[base de pruebas] La aplicación no está conectada a la base de pruebas esperada. Se detiene.');
+  }
   return app;
 }
 

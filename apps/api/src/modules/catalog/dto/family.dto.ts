@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsISO8601,
   IsNotEmpty,
   IsString,
   Matches,
@@ -45,6 +46,13 @@ export class UpdateFamilyDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   active?: boolean;
+
+  // Version the client edited (updatedAt it received). Optional: when sent,
+  // a newer change by someone else makes the API answer 409.
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsISO8601({ strict: true }, { message: 'expectedUpdatedAt debe ser la fecha updatedAt recibida' })
+  expectedUpdatedAt?: string;
+
 }
 
 export class ListFamiliesQueryDto {

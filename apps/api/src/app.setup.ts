@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import type { Express, NextFunction, Request, Response } from 'express';
+import { RetryableErrorFilter } from './infrastructure/http/retryable.js';
 
 // Local Vite dev server. Override with CORS_ORIGIN (comma-separated list).
 const DEFAULT_CORS_ORIGIN = 'http://localhost:5173';
@@ -50,6 +51,9 @@ export function configureApp(app: INestApplication): void {
     credentials: false,
     maxAge: 600,
   });
+
+  // Temporary database conditions -> 503 + Retry-After (safe to retry).
+  app.useGlobalFilters(new RetryableErrorFilter(app.getHttpAdapter()));
 
   app.useGlobalPipes(
     new ValidationPipe({

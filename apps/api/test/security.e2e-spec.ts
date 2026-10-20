@@ -95,7 +95,7 @@ describe('Security hardening (e2e)', () => {
     await expect(auth.login({ email: ghost, password: 'x' })).rejects.toMatchObject({ status: 429 });
   }, 60000);
 
-  it('answers 409 instead of waiting when a bundle stays locked', async () => {
+  it('answers 503 retryable (not a definitive 409) instead of waiting when a bundle stays locked', async () => {
     const bundle = await fx.register({ quantity: 5 });
     let release!: () => void;
     const released = new Promise<void>((resolve) => (release = resolve));
@@ -121,7 +121,10 @@ describe('Security hardening (e2e)', () => {
     release();
     await holder;
 
-    expect(res.status).toBe(409);
+    // Temporary: nothing applied, the client retries with the same key.
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(res.body).toMatchObject({ retryable: true });
     expect(res.body.message).toMatch(/otra operación/);
     expect(Date.now() - started).toBeLessThan(9000);
     const row = await fx.prisma.bundle.findUniqueOrThrow({ where: { id: bundle.id } });

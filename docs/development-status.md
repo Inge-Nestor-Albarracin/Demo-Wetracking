@@ -862,6 +862,48 @@ el API exige ADMIN en todos estos endpoints).
   usuarios; la matriz de `roles-permissions-idor-audit.md` debería añadir
   "cambiar rol (ADMIN)".
 
+## Revisión de concurrencia e idempotencia (20/10/2026)
+
+Informe completo, tabla por escenario y carga:
+[concurrency-audit.md](concurrency-audit.md). Sin migraciones nuevas, sin
+commit, push ni despliegue.
+
+- **Base de pruebas dedicada**: los e2e ya no usan la base de desarrollo.
+  `TEST_DATABASE_URL` (entorno o `apps/api/.env.test`, ignorado por Git;
+  `pnpm test:db:setup` la crea como `<dev>_e2e_test`). Guardas: host local
+  (o `TEST_DATABASE_ALLOWED_HOSTS`), nombre `*_test` sin "prod", distinta de
+  `DATABASE_URL`, `current_database()` comprobado en el *global setup* y en
+  cada app; `migrate deploy` una sola vez. La base de desarrollo quedó
+  idéntica antes y después.
+- **Corregido** (reproducido primero con prueba que fallaba):
+  1. Fila bloqueada > 5 s → era 409 (el frontend descartaba la clave y un
+     reintento podía duplicar); ahora 503 + `Retry-After` + `retryable`.
+  2. Errores transitorios de BD (pool agotado, timeouts, deadlock) → eran
+     500; filtro global `RetryableErrorFilter` → 503 reintentable.
+  3. Ediciones de catálogo sobrescribían cambios ajenos → `expectedUpdatedAt`
+     opcional en `PATCH /catalog/references/:id` y `/catalog/families/:id`,
+     actualización condicional → 409 "modificada por otra persona".
+  4. Frontend: la `operationKey` se conserva tras resultado incierto aunque
+     se edite el formulario; `ExitForm` ya no se re-monta al cambiar el
+     saldo; recarga del paquete/historial tras 409 o resultado incierto;
+     Administración sale del modo edición y recarga tras un conflicto.
+- **Pruebas nuevas**: `concurrency.e2e-spec.ts` (escenarios A–K,
+  idempotencia, operación en curso, permisos), `concurrency-repeat` (20
+  rondas × 3 casos críticos), `transient-errors`, carga
+  `test/load/inventory.load-spec.ts` (`pnpm test:load`, 5/10/25 usuarios).
+  `security.e2e-spec.ts` actualizada al contrato 503.
+- **Resultados**: unit 11/11; e2e 99/99 en 13 archivos sobre
+  `solaluminios_dev_e2e_test`; aislada 2/2; carga sin errores inesperados ni
+  saldos negativos/descuadrados (25 usuarios: 2151 solicitudes, p95 47 ms,
+  equipo local, no VPS); API lint y build OK; web build y lint OK.
+  Navegador (API 3101 con `pnpm start:test-db`, web 5174): saldo
+  desactualizado, respuesta perdida, 503 y conflicto de administración.
+- **Pantallas**: sin SSE/WebSocket ni sondeo en inventario (carga al abrir,
+  filtrar, paginar y tras operar o recibir conflicto); tareas cada 60 s.
+- **Pendiente**: clave de reintento en registro individual y creación de
+  tareas; limitador en memoria por instancia; `expectedUpdatedAt` opcional;
+  sin aislamiento por sucursal.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

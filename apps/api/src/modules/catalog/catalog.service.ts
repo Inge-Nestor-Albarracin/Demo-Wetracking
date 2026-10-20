@@ -74,6 +74,9 @@ export class CatalogService {
     return reference;
   }
 
+  // expectedUpdatedAt (optional): the version the client saw. The update is a
+  // single conditional statement, so an edit based on an old version is
+  // refused (409) instead of silently overwriting someone else's change.
   async updateReference(id: string, dto: UpdateReferenceDto) {
     if (
       dto.description === undefined &&
@@ -85,20 +88,15 @@ export class CatalogService {
       );
     }
 
-    const data: Prisma.ReferenceUpdateInput = {};
+    const data: Prisma.ReferenceUncheckedUpdateManyInput = {};
 
     if (dto.familyId !== undefined) {
       const current = await this.getReference(id);
-
-      if (dto.familyId === null) {
-        data.family = { disconnect: true };
-      } else {
-        // Keeping the current family is allowed even if it was deactivated.
-        if (dto.familyId !== current.familyId) {
-          await this.requireAssignableFamily(dto.familyId);
-        }
-        data.family = { connect: { id: dto.familyId } };
+      // Keeping the current family is allowed even if it was deactivated.
+      if (dto.familyId !== null && dto.familyId !== current.familyId) {
+        await this.requireAssignableFamily(dto.familyId);
       }
+      data.familyId = dto.familyId;
     }
 
     if (dto.description !== undefined) {
@@ -109,21 +107,18 @@ export class CatalogService {
       data.active = dto.active;
     }
 
-    try {
-      return await this.prisma.reference.update({
-        where: { id },
-        data,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('La referencia no existe');
-      }
-
-      throw error;
+    const { count } = await this.prisma.reference.updateMany({
+      where: { id, ...versionWhere(dto.expectedUpdatedAt) },
+      data,
+    });
+    const reference = await this.prisma.reference.findUnique({ where: { id } });
+    if (!reference) throw new NotFoundException('La referencia no existe');
+    if (count === 0) {
+      throw new ConflictException(
+        'La referencia fue modificada por otra persona. Recarga y vuelve a intentarlo.',
+      );
     }
+    return reference;
   }
 
   listFamilies(query: ListFamiliesQueryDto = {}) {
@@ -162,7 +157,7 @@ export class CatalogService {
       throw new BadRequestException('Debes enviar un nombre o un estado');
     }
 
-    const data: Prisma.ProductFamilyUpdateInput = {};
+    const data: Prisma.ProductFamilyUpdateManyMutationInput = {};
 
     if (dto.name !== undefined) {
       data.name = dto.name;
@@ -172,21 +167,18 @@ export class CatalogService {
       data.active = dto.active;
     }
 
-    try {
-      return await this.prisma.productFamily.update({
-        where: { id },
-        data,
-      });
-    } catch (error: unknown) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('La familia no existe');
-      }
-
-      throw error;
+    const { count } = await this.prisma.productFamily.updateMany({
+      where: { id, ...versionWhere(dto.expectedUpdatedAt) },
+      data,
+    });
+    const family = await this.prisma.productFamily.findUnique({ where: { id } });
+    if (!family) throw new NotFoundException('La familia no existe');
+    if (count === 0) {
+      throw new ConflictException(
+        'La familia fue modificada por otra persona. Recarga y vuelve a intentarlo.',
+      );
     }
+    return family;
   }
 
   private async requireFamily(id: string) {
@@ -276,4 +268,9 @@ export class CatalogService {
       throw error;
     }
   }
+}
+
+// Optimistic concurrency condition: only update the version the client saw.
+function versionWhere(expectedUpdatedAt: string | undefined) {
+  return expectedUpdatedAt ? { updatedAt: new Date(expectedUpdatedAt) } : {};
 }

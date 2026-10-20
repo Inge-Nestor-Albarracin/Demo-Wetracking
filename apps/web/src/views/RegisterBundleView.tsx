@@ -201,11 +201,16 @@ export function RegisterBundleView({
       const failed = typeof data?.itemIndex === 'number' ? queue.items[data.itemIndex]?.body.epc : undefined
       setProblemEpcs([...(data?.epcs ?? []), ...(failed ? [failed] : [])])
       setConflicts(data?.epcs ?? [])
-      const unknownOutcome = err instanceof ApiError && (err.status === 0 || err.status >= 500)
+      // The batch key is kept in every case until the list changes, so a
+      // resend is always recognised by the API (never saved twice).
+      const retryable = err instanceof ApiError && (err.data as { retryable?: boolean } | null)?.retryable === true
+      const unknownOutcome = !retryable && err instanceof ApiError && (err.status === 0 || err.status >= 500)
       setSaveError(
-        unknownOutcome
-          ? 'No se recibió la respuesta del servidor, así que no sabemos si la lista se guardó y sigue aquí marcada como NO guardada. Pulsa de nuevo «Confirmar guardado»: si el intento anterior sí se guardó, se reconocerá y no se duplicará nada.'
-          : `${describeError(err)} No se guardó ningún paquete de la lista.`,
+        retryable
+          ? `${describeError(err)} No se guardó ningún paquete; pulsa de nuevo «Confirmar guardado» para reintentar la misma lista.`
+          : unknownOutcome
+            ? 'No se recibió la respuesta del servidor, así que no sabemos si la lista se guardó y sigue aquí marcada como NO guardada. Pulsa de nuevo «Confirmar guardado»: si el intento anterior sí se guardó, se reconocerá y no se duplicará nada.'
+            : `${describeError(err)} No se guardó ningún paquete de la lista.`,
       )
       return false
     } finally {

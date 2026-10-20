@@ -10,6 +10,7 @@ import {
   type InventoryMovement,
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/database/prisma.service.js';
+import { RetryableException } from '../../infrastructure/http/retryable.js';
 import type { SafeUser } from '../auth/auth.types.js';
 import type {
   BundleAdjustmentDto,
@@ -238,9 +239,12 @@ export class InventoryOperationsService {
         { maxWait: 10000, timeout: 15000 },
       );
     } catch (error: unknown) {
+      // Another operation still holds the bundle: nothing was applied. This is
+      // temporary, so the client retries with the SAME operationKey (503),
+      // never as a definitive conflict that would make it pick a new key.
       if (isLockTimeout(error)) {
-        throw new ConflictException(
-          'El paquete está siendo modificado por otra operación. Inténtalo de nuevo en unos segundos.',
+        throw new RetryableException(
+          'El paquete está siendo modificado por otra operación. Reintenta en unos segundos con la misma solicitud.',
         );
       }
       // The same key was committed concurrently by another transaction.

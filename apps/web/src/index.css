@@ -1,50 +1,92 @@
-/* Design tokens shared with the login page (views/LoginView.css). */
+/* ==========================================================================
+   WeTracking brand tokens (Manual de marca, dic. 2020 + Diseño App v.03).
+   Palette (p. 15): aqua #00FFD7, blue #1184E6, cyan #00A5D7, navy #0B194F.
+   Typefaces (p. 16–17): Uni Neue for titles, Nunito Sans for text.
+   ========================================================================== */
+
+/* Uni Neue is a licensed Fontfabric typeface: it is used when installed on
+   the device. To serve it from the app, add the licensed .woff2 files and
+   their url() sources here. Otherwise titles fall back to Nunito Sans. */
+@font-face {
+  font-family: 'Uni Neue';
+  font-weight: 400;
+  src: local('Uni Neue Book'), local('UniNeue-Book'), local('UniNeueBook'), local('Uni Neue Regular'), local('UniNeue-Regular');
+}
+
+@font-face {
+  font-family: 'Uni Neue';
+  font-weight: 700;
+  src: local('Uni Neue Bold'), local('UniNeue-Bold'), local('UniNeueBold');
+}
+
 :root {
-  --ink: #17364a;
-  --ink-strong: #0f2a3a;
-  --muted: #586b77;
-  --muted-soft: #71818b;
-  --bg: #f7f8f6;
+  /* Brand palette — exact values from the manual. */
+  --brand-aqua: #00ffd7;
+  --brand-blue: #1184e6;
+  --brand-cyan: #00a5d7;
+  --brand-navy: #0b194f;
+
+  /* App design v.03: blue background, navy buttons, tiles. */
+  --brand-gradient: linear-gradient(180deg, #1650c5 0%, #0b3a96 55%, #012468 100%);
+  --brand-gradient-tile: linear-gradient(0deg, #154fc2 0%, #01256a 100%);
+  --brand-gradient-accent: linear-gradient(90deg, var(--brand-aqua), var(--brand-cyan));
+  --brand-gradient-panel: linear-gradient(180deg, #123a9c 0%, var(--brand-navy) 70%);
+
+  /* Text. Brand blue is used for large titles and fills; small text and
+     links use a darker shade of it (AA contrast on white). */
+  --ink: var(--brand-navy);
+  --ink-strong: #071240;
+  --text: #283253;
+  --muted: #5d6785;
+  --muted-soft: #8a92ab;
+  --blue-ink: #0d6fc4;
+
+  /* Surfaces (app design: #FAFAFA screens, #F7F8FA fields). */
+  --bg: #f4f6fa;
   --surface: #ffffff;
-  --surface-alt: #f1f4f2;
-  --line: #d9e0df;
-  --line-strong: #bbc8cc;
+  --surface-alt: #f7f8fa;
+  --line: #e7e9ec;
+  --line-strong: #d3d8e2;
 
-  --navy-1: #0a243d;
-  --navy-2: #103c53;
-  --navy-text: #f7faf9;
-  --navy-muted: #adc2cc;
-  --mint: #9edbcf;
-  --mint-strong: #83d8c9;
-  --mint-soft: #e8f4f1;
+  /* Dark areas (sidebar, summary panels) on the brand navy. */
+  --navy-1: var(--brand-navy);
+  --navy-2: #102a78;
+  --navy-text: #ffffff;
+  --navy-muted: #b9c3e3;
+  --mint: var(--brand-aqua);
+  --mint-strong: var(--brand-aqua);
+  --mint-soft: #e8f3fd;
 
-  --primary: #173e4b;
-  --primary-hover: #235664;
-  --primary-active: #0e2c36;
-  --focus: #147a80;
+  --primary: var(--brand-navy);
+  --primary-hover: #17307f;
+  --primary-active: #061038;
+  --focus: var(--brand-blue);
 
-  --danger: #a63c2e;
-  --danger-hover: #8a2f23;
-  --success-bg: #eaf6f1;
-  --success-border: #5fae94;
-  --error-bg: #fff0ed;
-  --error-border: #bc6355;
-  --warning-bg: #fff6df;
-  --warning-border: #af8932;
-  --info-bg: #eef5f7;
-  --info-border: #7fa9b8;
+  --danger: #c62f3a;
+  --danger-hover: #a3232d;
+  --success-bg: #e8fbf7;
+  --success-border: #00b8a0;
+  --error-bg: #fff1f1;
+  --error-border: #e5484d;
+  --warning-bg: #fff8e5;
+  --warning-border: #e0a526;
+  --info-bg: #edf5fd;
+  --info-border: var(--brand-blue);
 
-  --radius: 3px;
-  --shadow: 0 1px 2px #0f2a3a0f, 0 6px 20px -12px #0f2a3a40;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px #0b194f0d, 0 8px 24px -14px #0b194f40;
+  --shadow-lift: 0 2px 4px #0b194f12, 0 14px 30px -14px #0b194f59;
 
-  --sans: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
-  --serif: Georgia, 'Times New Roman', serif;
+  --sans: 'Nunito Sans Variable', 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  --display: 'Uni Neue', 'Nunito Sans Variable', 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  /* Chip codes only: distinguishes 0/O and 1/l. */
   --mono: Consolas, ui-monospace, 'Cascadia Mono', monospace;
 
-  /* Same light palette as the login page. */
   color-scheme: light;
   font: 15px/1.5 var(--sans);
-  color: var(--ink);
+  color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
@@ -67,6 +109,7 @@ h2,
 h3 {
   margin: 0;
   color: var(--ink);
+  font-family: var(--display);
   line-height: 1.15;
 }
 

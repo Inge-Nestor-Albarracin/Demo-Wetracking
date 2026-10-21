@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
-import { IconChart, IconList, IconLogout, IconProfile, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
+import { BrandLogo } from './components/brand/BrandLogo'
+import { IconChart, IconHome, IconList, IconLogout, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
 import { LogoutDialog } from './components/LogoutDialog'
 import { useRegistrationQueue } from './lib/registrationQueue'
 import type { TaskSummary } from './lib/tasks'
@@ -9,6 +10,7 @@ import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
 import { AdminView } from './views/AdminView'
 import { BundleDetailView } from './views/BundleDetailView'
 import { BundlesView } from './views/BundlesView'
+import { HomeView } from './views/HomeView'
 import { LoginView } from './views/LoginView'
 import { LookupView } from './views/LookupView'
 import type { View } from './views/navigation'
@@ -69,7 +71,7 @@ function Workspace() {
   const openTasks = taskSummary.data?.pending ?? 0
 
   const requestLogout = () => (pending > 0 ? setLogoutPrompt(true) : logout())
-  const [view, setView] = useState<View>(operator ? { name: 'register' } : { name: 'lookup' })
+  const [view, setView] = useState<View>({ name: 'home' })
   // Remount register/bundles when they receive initial values (EPC, filters).
   const [remountKey, setRemountKey] = useState(0)
 
@@ -80,6 +82,7 @@ function Workspace() {
   }
 
   const tabs: NavTab[] = [
+    { name: 'home', label: 'Inicio', short: 'Inicio', icon: IconHome },
     ...(operator ? [{ name: 'register' as const, label: 'Registrar paquete', short: 'Registrar', icon: IconRegister }] : []),
     { name: 'lookup', label: 'Consultar chip', short: 'Chip', icon: IconScan },
     { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
@@ -124,19 +127,12 @@ function Workspace() {
   return (
     <div className="shell">
       <aside className="sidebar" aria-label="Navegación principal">
-        <div className="sidebar-brand">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>
-            <strong>WeTracking</strong>
-            <small>Solución tecnológica</small>
-          </span>
-        </div>
+        <button type="button" className="sidebar-brand" onClick={() => navigate({ name: 'home' })} aria-label="WeTracking · Ir al inicio">
+          <BrandLogo variant="full" tone="negative" title="WeTracking" />
+        </button>
         <div className="sidebar-client">
-          <IconProfile />
-          <span>
-            <small>Inventario</small>
-            <strong>Solaluminios</strong>
-          </span>
+          <small>Inventario</small>
+          <strong>Solaluminios</strong>
         </div>
         <nav className="nav-side">{navButtons('side')}</nav>
         <div className="sidebar-user">
@@ -152,13 +148,14 @@ function Workspace() {
       </aside>
 
       <header className="topbar">
-        <div className="topbar-brand">
-          <IconProfile />
-          <span>
+        <button type="button" className="topbar-brand" onClick={() => navigate({ name: 'home' })} aria-label="WeTracking · Ir al inicio">
+          <BrandLogo className="topbar-logo" variant="minimal" tone="negative" title="WeTracking" />
+          <BrandLogo className="topbar-mark" variant="mark" tone="negative" title="WeTracking" />
+          <span className="topbar-client">
             <small>Inventario</small>
             <strong>Solaluminios</strong>
           </span>
-        </div>
+        </button>
         <div className="topbar-user">
           <span className="topbar-user-text">
             <strong>{user?.name}</strong>
@@ -173,6 +170,16 @@ function Workspace() {
       </header>
 
       <main className="content">
+        {view.name === 'home' ? (
+          <HomeView
+            name={user?.name ?? ''}
+            operator={operator}
+            admin={user?.role === 'ADMIN'}
+            pendingQueue={pending}
+            openTasks={openTasks}
+            navigate={navigate}
+          />
+        ) : null}
         {view.name === 'register' ? (
           <RegisterBundleView key={remountKey} initialEpc={view.epc} navigate={navigate} queue={queue} />
         ) : null}

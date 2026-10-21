@@ -36,6 +36,20 @@
       "port": 3101
     },
     {
+      "name": "api-test",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "apps/api",
+        "start:test-db"
+      ],
+      "env": {
+        "PORT": "3101",
+        "CORS_ORIGIN": "http://localhost:5174"
+      },
+      "port": 3101
+    },
+    {
       "name": "web-alt",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

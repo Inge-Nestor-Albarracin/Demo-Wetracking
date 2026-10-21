@@ -21,7 +21,7 @@ export function Field({
   )
 }
 
-// Page title in the login style: uppercase eyebrow + serif headline.
+// Page title: eyebrow with the brand pill + headline in the title typeface.
 export function PageHeader({
   eyebrow,
   title,
@@ -45,7 +45,7 @@ export function PageHeader({
   )
 }
 
-// Numbered form block ("01 Producto"), echoing the login feature list.
+// Numbered form block ("01 Producto"); the number sits in a navy pill.
 export function Section({
   number,
   title,
@@ -130,7 +130,7 @@ export function Notice({
 export function Loading({ label = 'Cargando…' }: { label?: string }) {
   return (
     <p className="loading" role="status">
-      <span className="spinner" aria-hidden="true" />
+      <span className="brand-loader" aria-hidden="true"><i /><i /></span>
       {label}
     </p>
   )

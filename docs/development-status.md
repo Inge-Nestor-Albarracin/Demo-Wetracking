@@ -904,6 +904,55 @@ commit, push ni despliegue.
   tareas; limitador en memoria por instancia; `expectedUpdatedAt` opcional;
   sin aislamiento por sucursal.
 
+## Frontend con la marca WeTracking (21/10/2026)
+
+Fuentes: «MANUAL WETracking 11DIC2020» (manual de marca) y «wetracking
+diseñoApp v03 4oct2021» (pantallas de la app). Solo `apps/web`; sin cambios
+de API, permisos ni flujos.
+
+- Colores exactos del manual como tokens en `src/index.css`: aqua `#00FFD7`,
+  azul `#1184E6`, cian `#00A5D7`, azul marino `#0B194F`; degradado azul
+  del diseño de la app (`#1650C5 → #012468`). Para texto pequeño y enlaces
+  se usa `#0D6FC4` (tono más oscuro del azul de marca, contraste AA); el
+  aqua solo va sobre fondos oscuros o como acento decorativo.
+- Tipografía: Nunito Sans (complementaria, OFL) servida desde la app con
+  `@fontsource-variable/nunito-sans`. Uni Neue (títulos) es una fuente
+  comercial de Fontfabric: se usa si está instalada en el equipo
+  (`local()`); si la empresa tiene la licencia web, basta añadir los
+  `.woff2` en el `@font-face` de `index.css`. Mientras tanto los títulos
+  usan Nunito Sans.
+- Logo vectorial trazado del manual (p. 6): `components/brand/BrandLogo.tsx`
+  con variantes original (con tag-line), mínima y solo isotipo «We», en
+  positivo/negativo. Favicon según la «versión favicon» (p. 9).
+- Login como el diseño de la app: fondo azul degradado, logo en negativo,
+  tarjeta blanca «¡Bienvenido!», campos grises con icono y etiqueta
+  flotante, botón píldora azul marino. Sin enlace de recuperar contraseña
+  (no existe esa función): se indica consultar al administrador.
+- Nueva vista **Inicio** (pantalla de entrada tras el login): «¡Hola!
+  nombre», banner de la empresa y tarjetas de acceso con iconos lineales
+  aqua → cian que se vuelven azules al pasar/pulsar; respeta los roles
+  (Registrar solo operadores, Administración solo ADMIN). El logo de la
+  barra lateral/superior lleva a Inicio.
+- Resto de pantallas: botones píldora, pasos numerados en píldora azul
+  marino, cejas con la píldora diagonal de marca, KPI y paneles en azul,
+  cargador «píldora + punto» del diseño, pestañas en píldora. Se eliminaron
+  la tipografía serif y el monoespaciado salvo en códigos de chip,
+  contraseñas generadas y códigos de catálogo.
+- Archivos: `index.html`, `public/favicon.svg`, `src/main.tsx`,
+  `src/index.css`, `src/App.css`, `src/App.tsx`, `src/views/LoginView.tsx`,
+  `src/views/LoginView.css`, `src/views/HomeView.tsx` (nuevo),
+  `src/views/navigation.ts`, `src/components/ui.tsx`,
+  `src/components/icons.tsx`, `src/components/brand/` (nuevo),
+  `package.json`/`pnpm-lock.yaml` (fuente). `.claude/launch.json`: entrada
+  `api-test` (API sobre la base de pruebas, puerto 3101).
+- Verificación: `pnpm build` y `pnpm lint` OK. Navegador (web 5174, API de
+  pruebas 3101 sobre `solaluminios_dev_e2e_test`): login, Inicio, registro,
+  consulta y detalle de chip, paquetes, resumen, tareas y administración en
+  375 px, ~730 px, 900 px y escritorio; sin desbordamiento horizontal ni
+  errores de consola. Datos temporales (1 usuario ADMIN, 1 sede/bodega/
+  pasillo/burro, familia, referencia, acabado, 3 paquetes, 4 movimientos,
+  1 tarea) borrados por ID exacto; la base de pruebas quedó vacía.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

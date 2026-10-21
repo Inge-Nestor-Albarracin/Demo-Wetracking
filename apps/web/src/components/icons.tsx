@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from 'react'
 
-// Line icons drawn with the same thin stroke as the login page.
+// Thin line icons, in the style of the WeTracking app design.
 function Icon({ children, ...props }: SVGProps<SVGSVGElement> & { children: ReactNode }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -11,6 +11,9 @@ function Icon({ children, ...props }: SVGProps<SVGSVGElement> & { children: Reac
 
 type P = SVGProps<SVGSVGElement>
 
+export const IconHome = (p: P) => (
+  <Icon {...p}><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1v-8.5Z" /></Icon>
+)
 export const IconRegister = (p: P) => (
   <Icon {...p}><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" /><path d="M4 7.5 12 12l8-4.5M12 12v9" /></Icon>
 )
@@ -49,12 +52,6 @@ export const IconCheck = (p: P) => (
 )
 export const IconClose = (p: P) => (
   <Icon {...p}><path d="M6 6l12 12M18 6 6 18" /></Icon>
-)
-export const IconProfile = (p: P) => (
-  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true" {...p}>
-    <path d="M8 36V12h10v24H8Zm14 0V6h10v30H22Zm14 0V18h6v18h-6Z" />
-    <path d="M6 42h38" />
-  </svg>
 )
 export const IconTasks = (p: P) => (
   <Icon {...p}><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5" /></Icon>

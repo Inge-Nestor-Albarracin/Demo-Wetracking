@@ -1,6 +1,7 @@
 import type { CatalogValue } from '../lib/forms'
 
 export type View =
+  | { name: 'home' }
   | { name: 'register'; epc?: string }
   | { name: 'lookup' }
   | { name: 'bundles'; catalog?: Partial<CatalogValue> }

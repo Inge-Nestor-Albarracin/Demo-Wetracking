@@ -9,7 +9,7 @@
         "apps/api",
         "start"
       ],
-      "port": 3000
+      "port": 3001
     },
     {
       "name": "web",
@@ -19,49 +19,6 @@
         "apps/web",
         "dev"
       ],
-      "port": 5173
-    },
-    {
-      "name": "api-alt",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "apps/api",
-        "start"
-      ],
-      "env": {
-        "PORT": "3101",
-        "CORS_ORIGIN": "http://localhost:5174"
-      },
-      "port": 3101
-    },
-    {
-      "name": "api-test",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "apps/api",
-        "start:test-db"
-      ],
-      "env": {
-        "PORT": "3101",
-        "CORS_ORIGIN": "http://localhost:5174"
-      },
-      "port": 3101
-    },
-    {
-      "name": "web-alt",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "apps/web",
-        "dev",
-        "--port",
-        "5174"
-      ],
-      "env": {
-        "VITE_API_URL": "http://localhost:3101"
-      },
       "port": 5174
     }
   ]

@@ -14,7 +14,7 @@ import { IconScan } from '../components/icons'
 import { Empty, Field, Kpi, Notice, PageHeader } from '../components/ui'
 import type { TagRead } from '../lib/chafon'
 import { bundlePlace, finishLabel, referenceLabel } from '../lib/format'
-import { useChafonReader } from '../lib/useChafonReader'
+import { useChafonReader, type ReaderPower } from '../lib/useChafonReader'
 import { canOperate, useSession } from '../session/session-context'
 import type { Navigate } from './navigation'
 
@@ -45,6 +45,106 @@ type Chip = BulkChip
 interface LookupResult {
   bundles: Bundle[]
   missing: string[]
+}
+
+// Quick choices as a share of the model's maximum power (H103: 12 / 21 / 33
+// dBm). Less power, shorter range: fewer neighbouring bundles read by mistake.
+function rangePresets(min: number, max: number) {
+  return [
+    { label: 'Corta', hint: 'Solo lo cercano', value: Math.max(min, Math.round(max * 0.35)) },
+    { label: 'Media', hint: 'Uso general', value: Math.max(min, Math.round(max * 0.65)) },
+    { label: 'Larga', hint: 'Máximo alcance', value: max },
+  ]
+}
+
+// Read range of the handheld (its RF power). Changed with the reader idle;
+// the value is written to the reader, keeping its other settings.
+function ReadRange({
+  power,
+  locked,
+  onChange,
+  onRetry,
+}: {
+  power: ReaderPower
+  locked: boolean
+  onChange: (value: number) => void
+  onRetry: () => void
+}) {
+  const [draft, setDraft] = useState<number | null>(null)
+
+  if (power.value === null) {
+    return (
+      <div className="read-range">
+        <strong className="read-range-title">Distancia de lectura</strong>
+        {power.error ? (
+          <small className="read-range-error">
+            {power.error}{' '}
+            <button type="button" className="link" onClick={onRetry}>Reintentar</button>
+          </small>
+        ) : (
+          <small className="read-range-note">Consultando la pistola…</small>
+        )}
+      </div>
+    )
+  }
+
+  const current = power.value
+  const value = draft ?? current
+  const apply = (next: number) => {
+    setDraft(null)
+    if (next !== current) onChange(next)
+  }
+
+  return (
+    <fieldset className="read-range" disabled={locked || power.busy}>
+      <legend className="read-range-title">Distancia de lectura</legend>
+      <div className="read-range-options">
+        {rangePresets(power.min, power.max).map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            className={`range-option${draft === null && current === preset.value ? ' selected' : ''}`}
+            aria-pressed={draft === null && current === preset.value}
+            onClick={() => apply(preset.value)}
+          >
+            <strong>{preset.label}</strong>
+            <small>{preset.hint}</small>
+          </button>
+        ))}
+      </div>
+      <label className="read-range-fine">
+        <span>Ajuste fino</span>
+        <input
+          type="range"
+          min={power.min}
+          max={power.max}
+          step={1}
+          value={value}
+          aria-valuetext={`${value} dBm`}
+          onChange={(e) => setDraft(Number(e.target.value))}
+        />
+        <output>{value} dBm</output>
+      </label>
+      {draft !== null && draft !== current ? (
+        <div className="read-range-apply">
+          <button type="button" className="button button-secondary" onClick={() => apply(draft)}>
+            Aplicar {draft} dBm
+          </button>
+          <button type="button" className="text-button" onClick={() => setDraft(null)}>Cancelar</button>
+        </div>
+      ) : null}
+      {power.error ? <small className="read-range-error">{power.error}</small> : null}
+      <small className="read-range-note">
+        {locked
+          ? 'Detén la lectura para cambiar la distancia.'
+          : power.busy
+            ? 'Guardando en la pistola…'
+            : power.saved
+              ? `Distancia guardada en la pistola: ${current} dBm.`
+              : `Potencia actual: ${current} de ${power.max} dBm${power.model ? ` (${power.model})` : ''}. Menos distancia evita leer paquetes vecinos.`}
+      </small>
+    </fieldset>
+  )
 }
 
 // Bulk RFID reading: many chips at once, each shown with its reference.
@@ -282,6 +382,15 @@ export function BulkReadView({
                 </button>
               )}
             </div>
+          ) : null}
+
+          {connected ? (
+            <ReadRange
+              power={reader.power}
+              locked={reader.reading || reader.trigger}
+              onChange={(value) => void reader.setPower(value)}
+              onRetry={() => void reader.reloadPower()}
+            />
           ) : null}
 
           {/* Collapsed when Bluetooth is available, to keep the results close

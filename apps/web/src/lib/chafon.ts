@@ -116,6 +116,65 @@ export function parseTag(frame: ChafonFrame): TagRead | null {
   return { epc: hex(epc), rssi }
 }
 
+// --- Read range (RF output power) -------------------------------------
+// The vendor app (SDK SettingFragment) changes the power by reading all the
+// parameters (RFM_GET_ALL_PARAM), replacing RfidPower and writing them back
+// unchanged (RFM_SET_ALL_PARAM). Same here, so no other setting is touched.
+// Codes and offsets taken from the SDK library (CmdBuilder / CmdHandler);
+// the manual lists device info as 0x0051 but the SDK sends 0x0070.
+export const CMD_DEVICE_INFO = 0x0070
+export const CMD_SET_ALL_PARAMS = 0x0071
+export const CMD_GET_ALL_PARAMS = 0x0072
+
+// Parameters after STATUS: Addr RFIDPRO WorkMode Interface Baudrate WGSet Ant
+// RfidFreq(8) RfidPower InquiryArea QValue Session AcsAddr AcsDataLen
+// FilterTime TriggerTime BuzzerTime PollingInterval = 25 bytes.
+const PARAMS_LENGTH = 25
+const POWER_INDEX = 15
+// Highest power among the supported handhelds (H103), in dBm.
+const POWER_LIMIT = 33
+
+export interface ReaderParams {
+  raw: Uint8Array // the 25 parameter bytes as reported by the reader
+  power: number // dBm
+}
+
+export const deviceInfoCommand = () => buildCommand(CMD_DEVICE_INFO)
+export const getParamsCommand = () => buildCommand(CMD_GET_ALL_PARAMS)
+
+export function parseParams(frame: ChafonFrame): ReaderParams | null {
+  if (frame.cmd !== CMD_GET_ALL_PARAMS || frame.status !== STATUS_OK) return null
+  if (frame.data.length < PARAMS_LENGTH) return null
+  const raw = frame.data.slice(0, PARAMS_LENGTH)
+  const power = raw[POWER_INDEX]
+  // Out of range means the frame is not what we expect: never write it back.
+  if (power > POWER_LIMIT) return null
+  return { raw, power }
+}
+
+export function setPowerCommand(params: ReaderParams, power: number): Uint8Array<ArrayBuffer> {
+  const raw = Array.from(params.raw)
+  raw[POWER_INDEX] = Math.min(POWER_LIMIT, Math.max(1, Math.round(power)))
+  return buildCommand(CMD_SET_ALL_PARAMS, raw)
+}
+
+// Device info after STATUS: hardware version (32 bytes ASCII), firmware
+// version (32) and serial number (12). The model (H100…) is in the versions.
+export function parseModel(frame: ChafonFrame): string | null {
+  if (frame.cmd !== CMD_DEVICE_INFO || frame.status !== STATUS_OK) return null
+  const text = String.fromCharCode(...frame.data.slice(0, 64))
+  return /H10[0-4]/i.exec(text)?.[0].toUpperCase() ?? null
+}
+
+// Power range per model (manual, RFM_SET_PWR). Unknown model: the general
+// range of RFM_SET_ALL_PARAM, the reader rejects what it cannot do.
+export function powerRange(model: string | null): { min: number; max: number } {
+  if (model === 'H100') return { min: 5, max: 20 }
+  if (model === 'H102') return { min: 5, max: 26 }
+  if (model === 'H103' || model === 'H104') return { min: 5, max: 33 }
+  return { min: 5, max: 30 }
+}
+
 // RFM_REPORT_KEYSTA: trigger pressed (true) or released (false).
 export function parseKey(frame: ChafonFrame): boolean | null {
   if (frame.cmd !== CMD_REPORT_KEY) return null

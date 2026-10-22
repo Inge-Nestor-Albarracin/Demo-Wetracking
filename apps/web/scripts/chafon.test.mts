@@ -35,4 +35,28 @@ assert.equal(f1.status, c.STATUS_INVENTORY_DONE); assert.equal(c.parseTag(f1), n
 const bc = [...Buffer.from('02' + Buffer.from('ABC123').toString('hex') + '030d', 'hex')];
 const barcode = c.buildCommand(0x0001, [0x00, 0, 0, 0, 0, bc.length, ...bc]);
 assert.equal(c.parseTag(new c.ChafonFrameParser().push(barcode)[0]), null);
-console.log('chafon protocol: 5/5 OK');
+// 6. Read range: GET_ALL_PARAM (0x0072) response -> SET_ALL_PARAM (0x0071)
+// with only RfidPower changed (offsets from the SDK CmdBuilder/CmdHandler).
+assert.equal(hex(c.getParamsCommand()).slice(0, 10), 'cfff007200');
+assert.equal(hex(c.deviceInfoCommand()).slice(0, 10), 'cfff007000');
+const params = [0x00, 0x00, 0x00, 0x80, 0x04, 0x00, 0x01, 0x01, 0x03, 0x86, 0x02, 0xee, 0x01, 0xf4, 0x32,
+  26, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01];
+const resp = new c.ChafonFrameParser().push(c.buildCommand(0x0072, [0x00, ...params]))[0];
+const parsed = c.parseParams(resp)!;
+assert.equal(parsed.power, 26);
+const set = c.setPowerCommand(parsed, 12);
+assert.equal(hex(set.slice(0, 5)), 'cfff007119');
+const expected = [...params]; expected[15] = 12;
+assert.deepEqual([...set.slice(5, 30)], expected); // everything else unchanged
+assert.equal(c.crc16(set, 30), (set[30] << 8) | set[31]);
+assert.equal(c.setPowerCommand(parsed, 99)[20], 33); // clamped
+assert.equal(c.parseParams(new c.ChafonFrameParser().push(c.buildCommand(0x0072, [0x00, ...params.slice(0, 10)]))[0]), null);
+const badPower = [...params]; badPower[15] = 0xc8;
+assert.equal(c.parseParams(new c.ChafonFrameParser().push(c.buildCommand(0x0072, [0x00, ...badPower]))[0]), null);
+// 7. Device info: model from the hardware/firmware version text.
+const ascii = (s: string, n: number) => [...Buffer.from(s.padEnd(n, '\0'), 'latin1')];
+const info = new c.ChafonFrameParser().push(c.buildCommand(0x0070, [0x00, ...ascii('HW-V2.1', 32), ...ascii('H103-FW-1.0.7', 32), ...ascii('SN0001', 12)]))[0];
+assert.equal(c.parseModel(info), 'H103');
+assert.deepEqual(c.powerRange('H103'), { min: 5, max: 33 });
+assert.deepEqual(c.powerRange(null), { min: 5, max: 30 });
+console.log('chafon protocol: 7/7 OK');

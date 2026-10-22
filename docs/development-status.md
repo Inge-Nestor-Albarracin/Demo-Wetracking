@@ -1021,6 +1021,49 @@ ejecutar nada del paquete.
 - **Pendiente con el equipo real:** probar con la pistola física (UUIDs y
   tramas reales, que el EPC llegue en hex igual al registrado por modo
   teclado, alcance/velocidad), y publicar el frontend con HTTPS.
+- 22/10/2026: el usuario confirmó lecturas con la pistola real. El error
+  «Cannot POST /inventory/bundles/lookup» era un API iniciado antes del
+  cambio con `nest start` sin `--watch`; se resuelve reiniciándolo
+  (`pnpm --dir apps/api start:dev`). Sin cambio de código.
+
+### Distancia de lectura (22/10/2026)
+
+Con el lector conectado, «Lectura masiva» muestra **Distancia de lectura**:
+Corta / Media / Larga (35 %, 65 % y 100 % de la potencia máxima del modelo)
+y un ajuste fino en dBm que solo se envía al pulsar «Aplicar». Se bloquea
+mientras se lee («Detén la lectura para cambiar la distancia»).
+
+- Protocolo, tomado de la librería del SDK (`cf-sdk-v1.0.4.aar`:
+  `CmdBuilder`/`CmdHandler`) y de la pantalla de ajustes de la app demo:
+  la distancia es la potencia RF. Igual que la app del fabricante, se leen
+  todos los parámetros (`RFM_GET_ALL_PARAM 0x0072`, 25 bytes tras STATUS),
+  se cambia solo `RfidPower` (byte 15) y se escriben de vuelta
+  (`RFM_SET_ALL_PARAM 0x0071`); luego se vuelve a leer para mostrar lo
+  guardado. El modelo se obtiene con `0x0070` (el manual dice 0x0051, el SDK
+  envía 0x0070) para el rango: H100 1–20, H102 1–26, H103 1–33 dBm; modelo
+  desconocido 5–30. Se usa mínimo 5 dBm. Si la respuesta no tiene la forma
+  esperada (longitud o potencia > 33) no se escribe nada.
+- El valor queda en la configuración de la pistola, por lo que también
+  afecta el modo teclado (HID) y la app del fabricante.
+- Archivos: `src/lib/chafon.ts` (comandos y lectura de parámetros/modelo),
+  `src/lib/useChafonReader.ts` (petición-respuesta por comando con tiempo
+  límite de 2 s y 3 intentos de lectura; estado `power`, `setPower`,
+  `reloadPower`), `views/BulkReadView.tsx` (`ReadRange`), `App.css`.
+  Sin cambios en el API ni en la base de datos.
+- Pruebas: `pnpm test` en `apps/web` 7/7 (nuevas: lectura de parámetros,
+  escritura con solo la potencia cambiada y CRC, límite a 33, respuesta
+  corta o potencia inválida rechazada, modelo desde la versión); lint y
+  build OK. Navegador (API de pruebas, lector **simulado** con respuestas
+  del protocolo en notificaciones de 20 bytes): lee H103 y 26 dBm; «Corta»
+  envía `cf ff 00 71 19 … 0c …` con los otros 24 bytes idénticos y muestra
+  «guardada: 12 dBm»; ajuste fino a 30 dBm; bloqueo durante la lectura;
+  lector sin respuesta → error sin cambiar el valor y «Reintentar» (la
+  lectura de chips sigue funcionando); celular 375 px sin desbordes; sin
+  errores en consola. Un usuario temporal en la base de pruebas, borrado por
+  ID (0 usuarios restantes).
+- **Pendiente con la pistola real:** confirmar que responde a 0x0070/0x0072
+  como el SDK, que la potencia cambia el alcance y que se conserva al
+  apagarla.
 
 ## Pendiente
 

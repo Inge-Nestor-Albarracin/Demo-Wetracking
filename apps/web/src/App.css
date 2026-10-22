@@ -2840,3 +2840,290 @@ tr.subrow td:first-child {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Bulk RFID reading (Chafon reader)
+   ========================================================================== */
+
+.bulk-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.bulk-reader {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.bulk-reader .notice {
+  margin-bottom: 0;
+}
+
+.bulk-reader-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bulk-reader-head strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.bulk-reader-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Status light: grey (off), aqua (connected), pulsing (reading). */
+.reader-dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.reader-dot.on {
+  background: var(--brand-aqua);
+  box-shadow: 0 0 0 4px #00ffd733;
+}
+
+.reader-dot.reading {
+  background: var(--brand-blue);
+  animation: reader-pulse 1s ease-in-out infinite;
+}
+
+@keyframes reader-pulse {
+  50% { box-shadow: 0 0 0 8px #1184e626; }
+}
+
+.bulk-reader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bulk-main {
+  flex: 1 1 200px;
+  min-height: 52px;
+  font-size: 15.5px;
+}
+
+.bulk-manual .field {
+  margin: 0;
+}
+
+.bulk-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.bulk-groups ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.bulk-groups .subtitle {
+  margin-top: 6px;
+}
+
+.bulk-groups li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--brand-cyan);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.bulk-groups li > span {
+  display: grid;
+  min-width: 0;
+}
+
+.bulk-groups li strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.bulk-groups li small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.bulk-group-count {
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bulk-group-count strong {
+  font: 800 20px/1.1 var(--display);
+}
+
+.bulk-filter {
+  flex-wrap: wrap;
+}
+
+.bulk-missing {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+@media (max-width: 1023px) {
+  .bulk-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .bulk-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .bulk-kpis .kpi {
+    padding: 12px 10px;
+  }
+
+  .bulk-kpis .kpi-label {
+    font-size: 10px;
+    letter-spacing: 0.6px;
+  }
+
+  .bulk-kpis .kpi-value {
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-dot.reading {
+    animation: none;
+  }
+}
+
+.bulk-manual summary {
+  color: var(--blue-ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bulk-manual[open] summary {
+  margin-bottom: 12px;
+}
+
+.bulk-filter {
+  align-items: center;
+}
+
+.bulk-clear {
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+/* Compact chip list of the bulk reading screen. */
+.bulk-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  list-style: none;
+}
+
+.bulk-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+  border-left: 4px solid var(--brand-aqua);
+}
+
+.bulk-list li:last-child {
+  border-bottom: 0;
+}
+
+.bulk-list li.unregistered {
+  border-left-color: var(--line-strong);
+  background: var(--surface-alt);
+}
+
+.bulk-item-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bulk-item-main .epc-link,
+.bulk-epc {
+  justify-self: start;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bulk-epc {
+  color: var(--muted);
+}
+
+.bulk-ref {
+  color: var(--text);
+  font-size: 14.5px;
+  overflow-wrap: anywhere;
+}
+
+.bulk-ref strong {
+  color: var(--ink);
+}
+
+.bulk-item-main small,
+.bulk-item-side small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bulk-item-side {
+  display: grid;
+  justify-items: end;
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bulk-qty {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.bulk-qty strong {
+  color: var(--ink);
+  font: 800 18px/1.1 var(--display);
+}
+
+@media (max-width: 760px) {
+  .bulk-list li {
+    padding: 10px 12px;
+  }
+}

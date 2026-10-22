@@ -4,6 +4,7 @@ export type View =
   | { name: 'home' }
   | { name: 'register'; epc?: string }
   | { name: 'lookup' }
+  | { name: 'bulk' }
   | { name: 'bundles'; catalog?: Partial<CatalogValue> }
   | { name: 'summary' }
   | { name: 'tasks' }

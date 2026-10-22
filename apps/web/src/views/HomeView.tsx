@@ -29,6 +29,14 @@ const TILE_ICONS: Record<Section, (stroke: string) => ReactNode> = {
       <path d="M15 21a6 6 0 0 1 12 0M18 21a3 3 0 0 1 6 0M21 21v6M12 21a9 9 0 0 1 18 0" />
     </g>
   ),
+  bulk: (s) => (
+    <g stroke={s}>
+      <rect x="6" y="10" width="12" height="28" rx="3" />
+      <path d="M10 33h4" />
+      <path d="M22 16a10 10 0 0 1 0 16M27 12a16 16 0 0 1 0 24" />
+      <path d="M33 14h9M33 20h9M35 26h7M33 32h9" />
+    </g>
+  ),
   bundles: (s) => (
     <g stroke={s}>
       <path d="m8 16 16-8 16 8-16 8-16-8Z" />
@@ -80,6 +88,7 @@ export function HomeView({
       ? [{ name: 'register' as const, title: 'Registrar', subtitle: pendingQueue > 0 ? `${pendingQueue} sin guardar` : 'Paquete nuevo', icon: TILE_ICONS.register }]
       : []),
     { name: 'lookup', title: 'Consultar', subtitle: 'Leer chip', icon: TILE_ICONS.lookup },
+    { name: 'bulk', title: 'Lectura masiva', subtitle: 'Muchos chips a la vez', icon: TILE_ICONS.bulk },
     { name: 'bundles', title: 'Paquetes', subtitle: 'Listado y filtros', icon: TILE_ICONS.bundles },
     { name: 'summary', title: 'Resumen', subtitle: 'Existencias', icon: TILE_ICONS.summary },
     { name: 'tasks', title: 'Tareas', subtitle: openTasks > 0 ? `${openTasks} ${openTasks === 1 ? 'pendiente' : 'pendientes'}` : 'Al día', icon: TILE_ICONS.tasks },

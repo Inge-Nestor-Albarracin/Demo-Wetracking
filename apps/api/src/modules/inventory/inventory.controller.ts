@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
   Post,
@@ -23,6 +24,7 @@ import {
   ListBundlesQueryDto,
   PaginationQueryDto,
 } from './dto/inventory-query.dto.js';
+import { LookupBundlesDto } from './dto/lookup-bundles.dto.js';
 import {
   RegisterBundleBatchDto,
   RegisterBundleDto,
@@ -72,6 +74,16 @@ export class InventoryController {
   @Get('summary')
   summary(@Query() query: InventorySummaryQueryDto) {
     return this.queries.summary(query);
+  }
+
+  // Bulk RFID reading: read-only, so 200 and available to every role, like
+  // the single-chip lookup below (POST only because of the list size; an
+  // undecorated POST would be treated as an admin write by RolesGuard).
+  @Roles('ADMIN', 'WAREHOUSE', 'SALES', 'READ_ONLY')
+  @Post('bundles/lookup')
+  @HttpCode(HttpStatus.OK)
+  lookupBundles(@Body() dto: LookupBundlesDto) {
+    return this.queries.lookupByEpcs(dto.epcs);
   }
 
   @Get('bundles/epc/:epc')

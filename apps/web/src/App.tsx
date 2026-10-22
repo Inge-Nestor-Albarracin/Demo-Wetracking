@@ -1,13 +1,14 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
 import { BrandLogo } from './components/brand/BrandLogo'
-import { IconChart, IconHome, IconList, IconLogout, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
+import { IconBulk, IconChart, IconHome, IconList, IconLogout, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
 import { LogoutDialog } from './components/LogoutDialog'
 import { useRegistrationQueue } from './lib/registrationQueue'
 import type { TaskSummary } from './lib/tasks'
 import { useLoad } from './lib/useLoad'
 import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
 import { AdminView } from './views/AdminView'
+import { BulkReadView, type BulkChips } from './views/BulkReadView'
 import { BundleDetailView } from './views/BundleDetailView'
 import { BundlesView } from './views/BundlesView'
 import { HomeView } from './views/HomeView'
@@ -30,6 +31,7 @@ interface NavTab {
   label: string
   short: string
   icon: ComponentType<SVGProps<SVGSVGElement>>
+  bottom?: false
 }
 
 function initials(name: string) {
@@ -49,6 +51,9 @@ function Workspace() {
   const queue = useRegistrationQueue(user?.id ?? 'anonymous')
   const pending = queue.items.length
   const [logoutPrompt, setLogoutPrompt] = useState(false)
+  // Bulk reading session: survives navigation (e.g. opening a bundle), not
+  // the logout (Workspace remounts per user).
+  const [bulkChips, setBulkChips] = useState<BulkChips>(() => new Map())
 
   // Closing or reloading the tab with unsaved bundles asks for confirmation.
   useEffect(() => {
@@ -85,6 +90,9 @@ function Workspace() {
     { name: 'home', label: 'Inicio', short: 'Inicio', icon: IconHome },
     ...(operator ? [{ name: 'register' as const, label: 'Registrar paquete', short: 'Registrar', icon: IconRegister }] : []),
     { name: 'lookup', label: 'Consultar chip', short: 'Chip', icon: IconScan },
+    // Not in the phone bottom bar (already full): reached from Inicio and
+    // from "Consultar chip".
+    { name: 'bulk', label: 'Lectura masiva', short: 'Masiva', icon: IconBulk, bottom: false },
     { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
     { name: 'summary', label: 'Resumen', short: 'Resumen', icon: IconChart },
     { name: 'tasks', label: 'Tareas', short: 'Tareas', icon: IconTasks },
@@ -95,7 +103,7 @@ function Workspace() {
   const current = view.name === 'bundle' ? 'lookup' : view.name
 
   const navButtons = (variant: 'side' | 'bottom' | 'top') =>
-    tabs.map((tab) => {
+    tabs.filter((tab) => variant !== 'bottom' || tab.bottom !== false).map((tab) => {
       const Icon = tab.icon
       const active = current === tab.name
       return (
@@ -184,6 +192,7 @@ function Workspace() {
           <RegisterBundleView key={remountKey} initialEpc={view.epc} navigate={navigate} queue={queue} />
         ) : null}
         {view.name === 'lookup' ? <LookupView navigate={navigate} /> : null}
+        {view.name === 'bulk' ? <BulkReadView navigate={navigate} chips={bulkChips} setChips={setBulkChips} /> : null}
         {view.name === 'bundles' ? (
           <BundlesView key={remountKey} navigate={navigate} initialCatalog={view.catalog} />
         ) : null}

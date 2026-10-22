@@ -60,6 +60,21 @@ export class InventoryQueriesService {
     return { items, page, pageSize, total, totalPages: pages(total, pageSize) };
   }
 
+  // Bulk RFID reading: which of these chips are registered bundles. Chips
+  // are returned in the order received; unknown ones go to `missing`.
+  async lookupByEpcs(epcs: string[]) {
+    const unique = [...new Set(epcs)];
+    const rows = await this.prisma.bundle.findMany({
+      where: { epc: { in: unique } },
+      include: bundleListInclude,
+    });
+    const byEpc = new Map(rows.map((row) => [row.epc, row]));
+    return {
+      bundles: unique.flatMap((epc) => byEpc.get(epc) ?? []),
+      missing: unique.filter((epc) => !byEpc.has(epc)),
+    };
+  }
+
   // Groups by reference + finish. Empty bundles (quantity 0) are excluded
   // from both profile and bundle counts.
   async summary(query: InventorySummaryQueryDto) {

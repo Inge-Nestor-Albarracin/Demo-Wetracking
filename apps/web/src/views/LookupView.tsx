@@ -37,6 +37,11 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
         eyebrow="Inventario · Consulta"
         title="Consultar por chip"
         description="Lee la etiqueta del paquete o escribe su código para ver referencia, acabado, ubicación, saldo y movimientos."
+        actions={
+          <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'bulk' })}>
+            Leer varios chips
+          </button>
+        }
       />
 
       {error ? <Notice kind="error">{error}</Notice> : null}

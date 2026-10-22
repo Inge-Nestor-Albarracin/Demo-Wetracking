@@ -970,6 +970,58 @@ de API, permisos ni flujos.
   chip, cantidad y botón en una sola pantalla del celular. Lista descartada
   y datos temporales borrados por ID; base de pruebas vacía.
 
+## Lectura masiva RFID con la pistola Chafon (22/10/2026)
+
+**Cambio de alcance pedido por el usuario:** AGENTS.md describía la fase 1
+sin lectura continua; este módulo la añade solo para **consultar**. No
+registra, no descuenta, no escribe/bloquea/mata etiquetas y no crea tablas.
+
+Fuente: SDK del fabricante «H100.102.103+SDK» (manual «UHF Hand Reader User
+Manual V1.2», «Bluetooth Development 20250304», app demo CfTech). Leído sin
+ejecutar nada del paquete.
+
+- Protocolo (modo **transparente** BLE): servicio `0000ffe0-…`, escritura
+  `0000ffe3-…`, notificaciones `0000ffe4-…` (UUIDs confirmados en la app
+  demo). Trama `CF ADDR CMD(2) LEN DATA CRC16` (preset 0xFFFF, polinomio
+  0x8408, MSB primero). Inicio de inventario continuo
+  `cf ff 00 01 05 00 00 00 00 00 f5 b5` (idéntico al ejemplo del
+  fabricante), parada `cf ff 00 02 00 …`. Lecturas: `cmd 0x0001`,
+  `STATUS 0`, `RSSI(2) ANT CH EPC_LEN EPC`; `0x12` = inventario terminado;
+  `0x0089` = gatillo. Los códigos de barras (H103/H104) se ignoran.
+- Web: `src/lib/chafon.ts` (tramas, CRC, re-ensamblado de notificaciones
+  partidas), `src/lib/useChafonReader.ts` (Web Bluetooth), vista
+  `views/BulkReadView.tsx` («Lectura masiva»: tarjeta en Inicio, menú
+  lateral/superior y botón «Leer varios chips» en Consultar chip; no está
+  en la barra inferior del celular porque ya está llena). Muestra por chip
+  el EPC, la referencia (código y descripción), acabado, perfiles,
+  ubicación y número de lecturas; resumen por referencia y filtros
+  registrados / no registrados; «Registrar» para chips sin paquete
+  (solo ADMIN/WAREHOUSE). Modo teclado (HID) y pegado de listas como
+  alternativa. La lista se conserva al abrir un paquete y volver; se borra
+  al cerrar sesión. Máximo 3000 chips por pantalla.
+- API: `POST /inventory/bundles/lookup` `{ epcs: string[] }` (1–200,
+  letras/números, normalizados) → `{ bundles, missing }`. Solo lectura, 200,
+  todos los roles (con `@Roles` explícito: un POST sin decorador sería
+  solo-ADMIN para RolesGuard). Sin migraciones.
+- Requisitos: Chrome en Android o computador, con **HTTPS** en producción
+  (Web Bluetooth no existe en iPhone/Safari ni en HTTP). La pistola debe
+  estar en salida «transparente» (app «UHF Reader» del fabricante); en modo
+  HID se usa el campo de modo teclado.
+- Pruebas: `pnpm test` en `apps/web` (protocolo 5/5: comando documentado,
+  tramas partidas en 7 bytes, ruido, CRC inválido, fin de inventario,
+  gatillo, código de barras). API: `test/bulk-reading.e2e-spec.ts` 4/4
+  (resultado y orden, solo lectura, roles y 401, validación 0/201/200).
+  Suite: unit 11/11, e2e 103/103 en 14 archivos, lint OK; web build/lint OK.
+  Navegador (API de pruebas): lector Bluetooth **simulado** con las tramas
+  del manual en notificaciones de 20 bytes (conectar, iniciar, 15 lecturas
+  de 5 chips → 5 filas con referencia, detener, gatillo, desconexión
+  inesperada conservando la lista), modo teclado, pegado de lista y
+  regreso desde el detalle. Datos temporales borrados por ID; base de
+  pruebas vacía.
+- **Pendiente con el equipo real:** probar con la pistola física (UUIDs y
+  tramas reales, que el EPC llegue en hex igual al registrado por modo
+  teclado, alcance/velocidad), y publicar el frontend con HTTPS.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

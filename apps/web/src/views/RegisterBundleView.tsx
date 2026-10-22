@@ -95,10 +95,10 @@ export function RegisterBundleView({
 
   const steps = [
     true,
-    !!catalog.referenceId && !!catalog.finishId && quantityValid,
+    !!catalog.referenceId && !!catalog.finishId,
     arrivalLabel !== null,
     !!location.rackId,
-    normalizedEpc !== '' && !epcInvalid,
+    normalizedEpc !== '' && !epcInvalid && quantityValid,
   ]
   const completed = steps.filter(Boolean).length
 
@@ -174,7 +174,14 @@ export function RegisterBundleView({
     setEpc('')
     setQuantity('')
     setNotes('')
-    epcInput.current?.focus({ preventScroll: true })
+    // After the re-render: the field is still disabled while "checking".
+    requestAnimationFrame(() => {
+      epcInput.current?.focus({ preventScroll: true })
+      // One column: bring the chip back into view for the next bundle.
+      if (window.matchMedia('(max-width: 1023px)').matches) {
+        epcInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+    })
   }
 
   // "Guardar definitivo": one transaction for the whole list. The same retry
@@ -233,11 +240,39 @@ export function RegisterBundleView({
     ['Tipo', TYPES.find((t) => t.value === registrationType)?.label ?? null],
     ['Referencia', catalogLabels.reference || null],
     ['Acabado', catalogLabels.finish || null],
-    ['Perfiles', quantityValid ? `${amount} ${amount === 1 ? 'perfil' : 'perfiles'}` : null],
     ['Llegada', arrivalLabel],
     ['Ubicación', location.rackId ? locationLabel : null],
     ['Chip', normalizedEpc && !epcInvalid ? normalizedEpc : null, true],
+    ['Perfiles', quantityValid ? `${amount} ${amount === 1 ? 'perfil' : 'perfiles'}` : null],
   ]
+
+  // Feedback + "Guardar y continuar": in the summary panel on desktop and
+  // right below chip and quantity on one-column layouts (see App.css).
+  const submitArea = (
+    <>
+      {added ? <Notice kind="success">{added}</Notice> : null}
+      {error ? (
+        <Notice kind="error">
+          {error}
+          {existingEpc ? (
+            <>
+              {' '}
+              <button type="button" className="link" onClick={() => viewExisting(existingEpc)}>
+                Ver el paquete existente
+              </button>
+            </>
+          ) : null}
+        </Notice>
+      ) : null}
+
+      <button type="submit" className="cta" disabled={busy || queueFull}>
+        <span aria-live="polite">{checking ? 'Verificando chip…' : 'Guardar y continuar'}</span>
+        <span className="cta-icon" aria-hidden="true">
+          {checking ? <span className="cta-progress" /> : <IconArrow />}
+        </span>
+      </button>
+    </>
+  )
 
   return (
     <>
@@ -313,19 +348,6 @@ export function RegisterBundleView({
               onDescribe={setCatalogLabels}
               disabled={busy}
             />
-            <Field label="Perfiles en el paquete" hint="Cantidad física disponible hoy, en perfiles enteros.">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                required
-                placeholder="Ej. 10"
-                disabled={busy}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-            </Field>
           </Section>
 
           <Section number="03" title="Llegada física" description="No se inventa un día si solo se conoce el mes o no hay registro.">
@@ -342,12 +364,8 @@ export function RegisterBundleView({
             />
           </Section>
 
-          <Section number="05" title="Etiqueta RFID" description="Lee el chip UHF con el lector o escribe su código.">
-            <Field
-              label="Código del chip"
-              wide
-              hint="Se guarda como texto en mayúsculas y conserva los ceros iniciales. La lectura con el lector Bluetooth aún debe comprobarse con el equipo real."
-            >
+          <Section number="05" title="Etiqueta RFID y perfiles" description="Lee el chip UHF con el lector o escribe su código, y la cantidad del paquete.">
+            <Field label="Código del chip" wide hint="Se guarda en mayúsculas y conserva los ceros iniciales.">
               <span className="input-wrap large">
                 <IconScan />
                 <input
@@ -368,6 +386,21 @@ export function RegisterBundleView({
               </span>
               {epcInvalid ? <span className="field-error">Solo letras y números, sin espacios.</span> : null}
             </Field>
+            {/* Right below the chip: chip and quantity are what change between
+                consecutive bundles, so phones barely need to scroll. */}
+            <Field label="Perfiles en el paquete" wide hint="Cantidad física disponible hoy, en perfiles enteros.">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                required
+                placeholder="Ej. 10"
+                disabled={busy}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+            </Field>
             <Field label="Notas (opcional)" wide>
               <textarea
                 rows={2}
@@ -378,6 +411,9 @@ export function RegisterBundleView({
                 onChange={(e) => setNotes(e.target.value)}
               />
             </Field>
+            {/* One-column layouts save right here instead of below the summary. */}
+            <div className="register-inline-actions field-wide">{submitArea}</div>
+            <p className="field-hint field-wide">La lectura con el lector Bluetooth aún debe comprobarse con el equipo real.</p>
           </Section>
         </div>
 
@@ -401,27 +437,7 @@ export function RegisterBundleView({
               ))}
             </dl>
             <footer>
-              {added ? <Notice kind="success">{added}</Notice> : null}
-              {error ? (
-                <Notice kind="error">
-                  {error}
-                  {existingEpc ? (
-                    <>
-                      {' '}
-                      <button type="button" className="link" onClick={() => viewExisting(existingEpc)}>
-                        Ver el paquete existente
-                      </button>
-                    </>
-                  ) : null}
-                </Notice>
-              ) : null}
-
-              <button type="submit" className="cta" disabled={busy || queueFull}>
-                <span aria-live="polite">{checking ? 'Verificando chip…' : 'Guardar y continuar'}</span>
-                <span className="cta-icon" aria-hidden="true">
-                  {checking ? <span className="cta-progress" /> : <IconArrow />}
-                </span>
-              </button>
+              <div className="summary-actions">{submitArea}</div>
               <p className="summary-note">
                 Se agrega a la lista; nada se guarda en el inventario hasta el guardado definitivo. Producto, llegada y
                 ubicación se conservan para el siguiente paquete.

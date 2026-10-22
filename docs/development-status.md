@@ -953,6 +953,23 @@ de API, permisos ni flujos.
   pasillo/burro, familia, referencia, acabado, 3 paquetes, 4 movimientos,
   1 tarea) borrados por ID exacto; la base de pruebas quedó vacía.
 
+### Registro en celular: chip y cantidad juntos (22/10/2026)
+
+- «Perfiles en el paquete» pasó de «02 Producto» a la sección 05, ahora
+  «Etiqueta RFID y perfiles», justo debajo del código del chip: es lo que
+  cambia entre paquetes consecutivos de la misma referencia, acabado y
+  llegada. El resumen lateral muestra Chip y Perfiles al final.
+- En una columna (≤ 1023 px) «Guardar y continuar» y sus avisos aparecen
+  debajo de chip, cantidad y notas; en escritorio siguen en el panel de
+  resumen (solo uno visible).
+- Corregido: tras agregar a la lista el foco no volvía al chip (el campo
+  seguía deshabilitado por la verificación). Ahora vuelve al chip y, en una
+  columna, lo centra en pantalla.
+- Verificado en navegador (375 px y 1280 px, API de pruebas): 3 paquetes
+  seguidos solo cambiando chip y cantidad; referencia/ubicación conservadas;
+  chip, cantidad y botón en una sola pantalla del celular. Lista descartada
+  y datos temporales borrados por ID; base de pruebas vacía.
+
 ## Pendiente
 
 1. ~~Familias~~ (hecho). Negocio: cargar familias reales; roles que crean

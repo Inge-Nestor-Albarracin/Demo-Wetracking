@@ -2815,3 +2815,28 @@ tr.subrow td:first-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Register: "Guardar y continuar" lives in the summary panel on desktop and
+   right below chip + quantity on one-column layouts (only one is shown). */
+.register-inline-actions {
+  display: none;
+}
+
+.summary-actions .notice:last-of-type {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1023px) {
+  .register-inline-actions {
+    display: grid;
+    gap: 12px;
+  }
+
+  .register-inline-actions .notice {
+    margin-bottom: 0;
+  }
+
+  .summary-actions {
+    display: none;
+  }
+}

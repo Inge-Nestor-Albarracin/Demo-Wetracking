@@ -41,7 +41,7 @@ export class JwtAuthGuard implements CanActivate {
       where: { id: claims.sub },
       select: {
         id: true, name: true, email: true, role: true,
-        active: true, defaultInventoryLocationId: true,
+        active: true,
       },
     });
     if (!user?.active) throw new UnauthorizedException('La sesión ya no está habilitada');

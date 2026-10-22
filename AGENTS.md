@@ -1,3 +1,10 @@
+> **RFID Demo.** Esta carpeta (`C:\Users\ASUS\Videos\We tracking demo`) es una copia
+> independiente para la demo de activos RFID. Base `rfid_demo`, API 3001, web 5174.
+> No trabajes ni escribas en `C:\Users\ASUS\Pictures\Aduvidrios` (proyecto original)
+> ni en sus bases. No uses git ni hagas push desde esta copia: su remoto es el
+> repositorio original. Lee primero `README-DEMO.md`. Las reglas del negocio
+> anterior que siguen abajo son históricas y no aplican a la demo.
+
 # Solaluminios: instrucciones compartidas para agentes de desarrollo
 
 ## Antes de trabajar

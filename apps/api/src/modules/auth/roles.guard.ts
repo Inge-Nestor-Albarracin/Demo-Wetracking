@@ -18,8 +18,8 @@ export class RolesGuard implements CanActivate {
     if (allowed) {
       if (allowed.includes(request.user.role)) return true;
     } else {
-      // Existing catalog/location reads: authenticated users.
-      // Existing writes: administrators, until explicit business roles are added.
+      // Routes without @Roles: reads for any authenticated user,
+      // writes only for administrators.
       if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
       if (request.user.role === 'ADMIN') return true;
     }

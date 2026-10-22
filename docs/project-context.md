@@ -171,7 +171,8 @@ de afirmar que la tabla ya no existe.
 
 ## Arquitectura técnica
 
-Raíz local conocida: C:\Users\ASUS\Pictures\Aduvidrios. Si se trabaja en otra
+Raíz del original: C:\Users\ASUS\Pictures\Aduvidrios (fuera de alcance para RFID Demo,
+cuya raíz es C:\Users\ASUS\Videos\We tracking demo). En cualquier
 copia, localizar la raíz que contiene apps/api y apps/web, no hardcodear el path.
 Frontend React/TypeScript/Vite; backend NestJS modular ESM; PostgreSQL local
 solaluminios_dev, schema public; Prisma 7.8.0 con adapter-pg. Gestor pnpm: usar

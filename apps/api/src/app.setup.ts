@@ -4,7 +4,7 @@ import type { Express, NextFunction, Request, Response } from 'express';
 import { RetryableErrorFilter } from './infrastructure/http/retryable.js';
 
 // Local Vite dev server. Override with CORS_ORIGIN (comma-separated list).
-const DEFAULT_CORS_ORIGIN = 'http://localhost:5173';
+const DEFAULT_CORS_ORIGIN = 'http://localhost:5174';
 
 export function corsOrigins(): string[] {
   return (process.env.CORS_ORIGIN ?? DEFAULT_CORS_ORIGIN)
@@ -22,7 +22,7 @@ export function trustedProxyHops(): number {
 }
 
 // Defensive headers for a JSON API (equivalent to helmet's relevant subset,
-// without adding a dependency). Responses carry session-scoped inventory data,
+// without adding a dependency). Responses carry session-scoped asset data,
 // so they must not be cached by browsers or intermediaries.
 function securityHeaders(_request: Request, response: Response, next: NextFunction) {
   response.setHeader('X-Content-Type-Options', 'nosniff');

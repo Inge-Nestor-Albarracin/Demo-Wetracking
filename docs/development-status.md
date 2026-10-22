@@ -1,5 +1,60 @@
 # Estado de desarrollo
 
+## RFID Demo: base rfid_demo, esquema User/Asset y API de activos (22/10/2026)
+
+Copia independiente en `C:\Users\ASUS\Videos\We tracking demo`. El original
+(`C:\Users\ASUS\Pictures\Aduvidrios`, BD `solaluminios_dev`) no se modificó.
+Instrucciones operativas en `README-DEMO.md`.
+
+- Rutas corregidas en la copia: el `node_modules` copiado estaba roto y su
+  `.modules.yaml` apuntaba al virtual store del original. Se apartó a la
+  carpeta temporal y se reinstaló con `pnpm install --frozen-lockfile`
+  (virtual store propio). `.env`: usuario de BD corregido (`postgre` →
+  `postgres`), `PORT=3001`, `CORS_ORIGIN=http://localhost:5174`,
+  `RFID_DEMO_DATABASE=rfid_demo` y `JWT_SECRET` nuevo y propio. `.env.test`
+  apuntaba a `solaluminios_dev_e2e_test` (del original); ahora apunta a
+  `rfid_demo_test`.
+- `main.ts`: el cambio local sin confirmar (`process.env.POrt`, host `'0.0'`)
+  impedía arrancar; ahora usa `PORT ?? 3001` y `HOST ?? '0.0.0.0'`.
+- Esquema: solo `User` (`users`; roles ADMIN/OPERATOR) y `Asset` (`assets`;
+  EPC único normalizado, nombre, descripción, categoría y ubicación opcionales,
+  `active` y `createdById`). Migración nueva
+  `20261022000000_init_rfid_demo`, revisada y generada con
+  `prisma migrate diff --from-empty`. Se retiraron de la copia las migraciones
+  y los módulos del negocio anterior (catalog, inventory, locations, tasks),
+  junto con sus pruebas.
+- API: `AssetsModule` (`/assets`: crear, listar con filtros, paginación y
+  totales, detalle, por EPC, `resolve` de solo lectura, editar y activar). Auth
+  y hash scrypt sin cambios de mecanismo; las claves de metadatos y el
+  issuer/audience del JWT ahora son `rfid-demo`.
+- Scripts: `pnpm db:check` | `db:migrate` | `db:generate` | `db:seed`. Todos
+  verifican `current_database() = rfid_demo` antes de escribir.
+  `src/scripts/seed-demo.ts` es idempotente: 2 cuentas y 10 activos ficticios
+  (uno inactivo, dos con el mismo nombre). Las contraseñas generadas solo se
+  guardan en `apps/api/.env.demo-credentials`, ignorado por git.
+
+Verificado (22/10/2026):
+- `pnpm build` OK, `pnpm lint` OK, `pnpm test` 11/11.
+- `pnpm db:migrate` sobre `rfid_demo` vacía → 1 migración aplicada.
+  `db:seed` ×2 → la segunda ejecución crea 0 registros.
+- API real (`node dist/main.js`, puerto 3001): login OPERATOR/ADMIN 200,
+  contraseña incorrecta 401, sin token 401, respuesta sin hash, registro 201
+  con creador de la sesión, EPC duplicado 409, OPERATOR no edita (403),
+  `resolve` distingue registrado, inactivo y desconocido.
+- Tras detener y volver a iniciar el API, el activo creado persiste, se
+  localiza con filtros y el EPC desconocido no se registró. BD final: 2
+  usuarios y 11 activos (10 de semilla y 1 de verificación,
+  `D3E0VERIF…`, categoría "Verificación").
+
+Pendiente:
+- `test/assets.e2e-spec.ts` y las e2e adaptadas no se ejecutaron. Requieren
+  crear `rfid_demo_test` con `pnpm test:db:setup` y después `pnpm test:e2e`.
+- Frontend sin adaptar: sigue con las pantallas del negocio anterior.
+- Git: las eliminaciones hechas con `git rm` quedaron preparadas en el índice
+  local; no hay commit ni push. El remoto de la copia es el repositorio
+  original: no usar git aquí hasta tener un repositorio propio para la demo.
+
+
 ## Auditoría de roles, permisos e IDOR (16/10/2026)
 
 - Informe: [roles-permissions-idor-audit.md](roles-permissions-idor-audit.md),

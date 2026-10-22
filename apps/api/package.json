@@ -22,8 +22,11 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:isolated": "node scripts/test-isolated.mjs",
     "test:db:setup": "node scripts/setup-test-db.mjs",
-    "test:load": "vitest run --config ./vitest.config.load.ts",
-    "start:test-db": "node scripts/start-test-api.mjs"
+    "start:test-db": "node scripts/start-test-api.mjs",
+    "db:check": "node scripts/assert-demo-db.mjs",
+    "db:migrate": "node scripts/assert-demo-db.mjs && prisma migrate deploy && node scripts/assert-demo-db.mjs",
+    "db:generate": "prisma generate",
+    "db:seed": "node scripts/assert-demo-db.mjs && tsx src/scripts/seed-demo.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

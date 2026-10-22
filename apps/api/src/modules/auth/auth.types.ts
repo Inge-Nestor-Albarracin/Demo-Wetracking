@@ -1,7 +1,7 @@
 import type { User } from '../../generated/prisma/client.js';
 
 export type SafeUser = Pick<User,
-  'id' | 'name' | 'email' | 'role' | 'active' | 'defaultInventoryLocationId'
+  'id' | 'name' | 'email' | 'role' | 'active'
 >;
 
 export interface AuthenticatedRequest {

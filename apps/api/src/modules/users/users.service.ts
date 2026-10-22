@@ -8,7 +8,7 @@ import type { CreateUserDto } from './dto/user.dto.js';
 
 const SAFE_SELECT = {
   id: true, name: true, email: true, role: true, active: true,
-  defaultInventoryLocationId: true, createdAt: true, updatedAt: true,
+  createdAt: true, updatedAt: true,
 } as const;
 
 @Injectable()
@@ -25,7 +25,7 @@ export class UsersService {
       return await this.prisma.user.create({
         data: {
           name: dto.name, email: dto.email, passwordHash,
-          role: dto.role ?? 'READ_ONLY',
+          role: dto.role ?? 'OPERATOR',
         },
         select: SAFE_SELECT,
       });

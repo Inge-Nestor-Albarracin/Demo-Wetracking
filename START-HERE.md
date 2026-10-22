@@ -1,11 +1,18 @@
+> **RFID Demo.** Esta carpeta (`C:\Users\ASUS\Videos\We tracking demo`) es una copia
+> independiente para la demo de activos RFID. Base `rfid_demo`, API 3001, web 5174.
+> No trabajes ni escribas en `C:\Users\ASUS\Pictures\Aduvidrios` (proyecto original)
+> ni en sus bases. No uses git ni hagas push desde esta copia: su remoto es el
+> repositorio original. Lee primero `README-DEMO.md`. Las reglas del negocio
+> anterior que siguen abajo son históricas y no aplican a la demo.
+
 # Configurar Claude Code para Solaluminios
 
 ## Ubicación
 
 Coloca AGENTS.md y CLAUDE.md en la raíz del monorepo, al mismo nivel que apps,
 package.json y pnpm-workspace.yaml. Coloca la carpeta docs junto a ellos.
-La raíz conocida es C:\Users\ASUS\Pictures\Aduvidrios; usar la copia actual
-si elegiste otra ubicación con el mismo proyecto.
+Raíz de esta copia (RFID Demo): C:\Users\ASUS\Videos\We tracking demo. El original en
+C:\Users\ASUS\Pictures\Aduvidrios queda fuera de alcance.
 
 Si ya existen archivos de instrucciones, conserva las reglas vigentes y
 combina el contenido. No reemplaces ciegamente instrucciones de la empresa.
@@ -19,7 +26,7 @@ continúa allí. No hace falta instalar una segunda interfaz. Si trabajas desde
 terminal y ya está instalado:
 
 ```powershell
-cd C:\Users\ASUS\Pictures\Aduvidrios
+cd "C:\Users\ASUS\Videos\We tracking demo"
 claude --version
 claude
 ```

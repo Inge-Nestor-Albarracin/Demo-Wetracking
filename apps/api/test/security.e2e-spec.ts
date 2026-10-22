@@ -1,13 +1,17 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { HttpException, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { hashPassword } from '../src/infrastructure/security/password.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
-import { createE2eApp, uniqueSuffix } from './support/e2e.js';
-import { createInventoryFixtures } from './support/inventory-fixtures.js';
+import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
+import { createE2eApp, createTestUser, uniqueSuffix } from './support/e2e.js';
 
-type Fixtures = Awaited<ReturnType<typeof createInventoryFixtures>>;
+interface Fixtures {
+  prisma: PrismaService;
+  userIds: Record<'ADMIN' | 'OPERATOR', string>;
+  headers: Record<'ADMIN' | 'OPERATOR', Record<string, string>>;
+}
 
 // Security fixes from the audit of 15/10/2026.
 describe('Security hardening (e2e)', () => {
@@ -18,44 +22,50 @@ describe('Security hardening (e2e)', () => {
 
   beforeAll(async () => {
     app = await createE2eApp();
-    fx = await createInventoryFixtures(app, suffix, ['ADMIN', 'WAREHOUSE']);
+    const admin = await createTestUser(app, 'ADMIN', suffix);
+    const operator = await createTestUser(app, 'OPERATOR', suffix);
+    fx = {
+      prisma: app.get(PrismaService),
+      userIds: { ADMIN: admin.id, OPERATOR: operator.id },
+      headers: { ADMIN: admin.headers, OPERATOR: operator.headers },
+    };
+    extraUsers.push(admin.id, operator.id);
   });
 
   afterAll(async () => {
     if (fx) await fx.prisma.user.deleteMany({ where: { id: { in: extraUsers } } });
-    await fx?.cleanup();
     await app?.close();
   });
 
   it('deactivating an account rejects its already-issued token on the next request', async () => {
     const server = app.getHttpServer();
-    const warehouseId = fx.userIds.WAREHOUSE;
-    await request(server).get('/auth/me').set(fx.headers.WAREHOUSE).expect(200);
+    const operatorId = fx.userIds.OPERATOR;
+    await request(server).get('/auth/me').set(fx.headers.OPERATOR).expect(200);
 
     await request(server)
-      .patch(`/users/${warehouseId}/active`)
+      .patch(`/users/${operatorId}/active`)
       .set(fx.headers.ADMIN)
       .send({ active: false })
       .expect(200);
     // Same token, no new login: the guard re-reads `active` on every request.
-    const rejected = await request(server).get('/auth/me').set(fx.headers.WAREHOUSE).expect(401);
+    const rejected = await request(server).get('/auth/me').set(fx.headers.OPERATOR).expect(401);
     expect(rejected.body.message).toBe('La sesión ya no está habilitada');
-    await request(server).get('/inventory/summary').set(fx.headers.WAREHOUSE).expect(401);
+    await request(server).get('/assets').set(fx.headers.OPERATOR).expect(401);
 
     // Known limit (documented): reactivating within the token lifetime (1 h)
     // makes that same token valid again; there is no per-token revocation.
     await request(server)
-      .patch(`/users/${warehouseId}/active`)
+      .patch(`/users/${operatorId}/active`)
       .set(fx.headers.ADMIN)
       .send({ active: true })
       .expect(200);
-    await request(server).get('/auth/me').set(fx.headers.WAREHOUSE).expect(200);
+    await request(server).get('/auth/me').set(fx.headers.OPERATOR).expect(200);
   });
 
   it('sends defensive headers and hides the framework', async () => {
     for (const res of [
-      await request(app.getHttpServer()).get('/inventory/summary').set(fx.headers.ADMIN),
-      await request(app.getHttpServer()).get('/inventory/summary'),
+      await request(app.getHttpServer()).get('/assets').set(fx.headers.ADMIN),
+      await request(app.getHttpServer()).get('/assets'),
     ]) {
       expect(res.headers['x-powered-by']).toBeUndefined();
       expect(res.headers['x-content-type-options']).toBe('nosniff');
@@ -69,7 +79,7 @@ describe('Security hardening (e2e)', () => {
     const password = randomBytes(12).toString('base64url');
     const email = `e2e-lock-${suffix.toLowerCase()}@test.local`;
     const user = await fx.prisma.user.create({
-      data: { name: 'E2E lock', email, passwordHash: await hashPassword(password), role: 'READ_ONLY' },
+      data: { name: 'E2E lock', email, passwordHash: await hashPassword(password), role: 'OPERATOR' },
     });
     extraUsers.push(user.id);
     // Called on the service: the per-IP throttler (5/min on /auth/login)
@@ -94,76 +104,4 @@ describe('Security hardening (e2e)', () => {
     }
     await expect(auth.login({ email: ghost, password: 'x' })).rejects.toMatchObject({ status: 429 });
   }, 60000);
-
-  it('answers 503 retryable (not a definitive 409) instead of waiting when a bundle stays locked', async () => {
-    const bundle = await fx.register({ quantity: 5 });
-    let release!: () => void;
-    const released = new Promise<void>((resolve) => (release = resolve));
-    let locked!: () => void;
-    const isLocked = new Promise<void>((resolve) => (locked = resolve));
-
-    // Another transaction holds the row lock for longer than lock_timeout.
-    const holder = fx.prisma.$transaction(
-      async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "bundles" WHERE id = ${bundle.id} FOR UPDATE`;
-        locked();
-        await released;
-      },
-      { timeout: 20000 },
-    );
-    await isLocked;
-
-    const started = Date.now();
-    const res = await request(app.getHttpServer())
-      .post(`/inventory/bundles/${bundle.id}/exit`)
-      .set(fx.headers.WAREHOUSE)
-      .send({ operationKey: randomUUID(), quantity: 1 });
-    release();
-    await holder;
-
-    // Temporary: nothing applied, the client retries with the same key.
-    expect(res.status).toBe(503);
-    expect(res.headers['retry-after']).toBeDefined();
-    expect(res.body).toMatchObject({ retryable: true });
-    expect(res.body.message).toMatch(/otra operación/);
-    expect(Date.now() - started).toBeLessThan(9000);
-    const row = await fx.prisma.bundle.findUniqueOrThrow({ where: { id: bundle.id } });
-    expect(row.quantity).toBe(5);
-  }, 30000);
-
-  it('rejects an adjustment above the per-bundle maximum with 400, not 500', async () => {
-    const bundle = await fx.register({ quantity: 999_999 });
-    await request(app.getHttpServer())
-      .post(`/inventory/bundles/${bundle.id}/adjustments`)
-      .set(fx.headers.ADMIN)
-      .send({ operationKey: randomUUID(), type: 'ADJUSTMENT_IN', quantity: 5, reason: 'Prueba tope' })
-      .expect(400);
-    await request(app.getHttpServer())
-      .post(`/inventory/bundles/${bundle.id}/adjustments`)
-      .set(fx.headers.ADMIN)
-      .send({ operationKey: randomUUID(), type: 'ADJUSTMENT_IN', quantity: 1, reason: 'Prueba tope' })
-      .expect(201);
-  });
-
-  it('bundle detail returns only the latest 20 movements, newest first', async () => {
-    const bundle = await fx.register({ quantity: 30 });
-    for (let i = 0; i < 22; i += 1) {
-      await request(app.getHttpServer())
-        .post(`/inventory/bundles/${bundle.id}/exit`)
-        .set(fx.headers.WAREHOUSE)
-        .send({ operationKey: randomUUID(), quantity: 1 })
-        .expect(201);
-    }
-    const detail = await request(app.getHttpServer())
-      .get(`/inventory/bundles/${bundle.id}`)
-      .set(fx.headers.WAREHOUSE)
-      .expect(200);
-    expect(detail.body.movements).toHaveLength(20);
-    expect(detail.body.movements[0].quantityAfter).toBe(8);
-    const history = await request(app.getHttpServer())
-      .get(`/inventory/bundles/${bundle.id}/movements?pageSize=100`)
-      .set(fx.headers.WAREHOUSE)
-      .expect(200);
-    expect(history.body.total).toBe(23);
-  });
 });

@@ -64,13 +64,13 @@ describe('UsersService.setRole', () => {
 
   it('refuses to demote the last active administrator', async () => {
     const { service, update } = build(['admin-1']);
-    await expect(service.setRole('admin-1', 'WAREHOUSE', 'admin-2')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.setRole('admin-1', 'OPERATOR', 'admin-2')).rejects.toBeInstanceOf(BadRequestException);
     expect(update).not.toHaveBeenCalled();
   });
 
   it('demotes an admin when another active admin remains, and promotes freely', async () => {
     const { service, tx } = build(['admin-1', 'admin-2']);
-    await expect(service.setRole('admin-1', 'SALES', 'admin-2')).resolves.toMatchObject({ role: 'SALES' });
+    await expect(service.setRole('admin-1', 'OPERATOR', 'admin-2')).resolves.toMatchObject({ role: 'OPERATOR' });
     await expect(service.setRole('user-9', 'ADMIN', 'admin-2')).resolves.toMatchObject({ role: 'ADMIN' });
     // Promotion does not need to lock the admins.
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
@@ -78,6 +78,6 @@ describe('UsersService.setRole', () => {
 
   it('refuses changing your own role', async () => {
     const { service } = build(['admin-1', 'admin-2']);
-    await expect(service.setRole('admin-1', 'READ_ONLY', 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.setRole('admin-1', 'OPERATOR', 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

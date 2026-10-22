@@ -37,6 +37,6 @@ export class UpdateUserActiveDto {
 }
 
 export class UpdateUserRoleDto {
-  @IsEnum(UserRole, { message: 'role debe ser ADMIN, WAREHOUSE, SALES o READ_ONLY' })
+  @IsEnum(UserRole, { message: 'role debe ser ADMIN u OPERATOR' })
   role!: UserRole;
 }

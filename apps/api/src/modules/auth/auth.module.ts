@@ -23,13 +23,13 @@ import { RolesGuard } from './roles.guard.js';
           signOptions: {
             algorithm: 'HS256' as const,
             expiresIn: '1h' as const,
-            issuer: 'solaluminios-api',
-            audience: 'solaluminios-web',
+            issuer: 'rfid-demo-api',
+            audience: 'rfid-demo-web',
           },
           verifyOptions: {
             algorithms: ['HS256' as const],
-            issuer: 'solaluminios-api',
-            audience: 'solaluminios-web',
+            issuer: 'rfid-demo-api',
+            audience: 'rfid-demo-web',
           },
         };
       },

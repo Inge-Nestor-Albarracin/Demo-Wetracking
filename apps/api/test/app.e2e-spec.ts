@@ -12,7 +12,7 @@ describe('AppController (e2e)', () => {
 
   beforeAll(async () => {
     app = await createE2eApp();
-    const user = await createTestUser(app, 'READ_ONLY', suffix);
+    const user = await createTestUser(app, 'OPERATOR', suffix);
     userId = user.id;
     headers = user.headers;
   });

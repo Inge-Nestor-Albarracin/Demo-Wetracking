@@ -10,255 +10,51 @@ datasource db {
   provider = "postgresql"
 }
 
-enum InventoryLocationType {
-  WAREHOUSE
-  RETAIL_STORE
-}
-
-enum ArrivalDatePrecision {
-  EXACT
-  MONTH
-  UNKNOWN
-}
-
-enum InventoryMovementType {
-  INITIAL_STOCK
-  ENTRY
-  EXIT
-  TRANSFER
-  ADJUSTMENT_IN
-  ADJUSTMENT_OUT
-}
+// RFID Demo: only users and assets. Every asset is one object tagged with one
+// EPC. Reading sessions are kept in the application, not in the database.
 
 enum UserRole {
   ADMIN
-  WAREHOUSE
-  SALES
-  READ_ONLY
+  OPERATOR
 }
-
-// LOCATIONS: existing physical table/column names are preserved with mappings.
-
-model Branch {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  address   String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  inventoryLocations InventoryLocation[]
-
-  @@map("branches")
-}
-
-model InventoryLocation {
-  id        String                @id @default(cuid())
-  code      String
-  name      String
-  type      InventoryLocationType @default(WAREHOUSE)
-  active    Boolean               @default(true)
-  branchId  String
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-
-  branch            Branch              @relation(fields: [branchId], references: [id])
-  aisles            Aisle[]
-  bundles           Bundle[]
-  defaultUsers      User[]
-  outgoingMovements InventoryMovement[] @relation("MovementSourceLocation")
-  incomingMovements InventoryMovement[] @relation("MovementDestinationLocation")
-
-  @@unique([branchId, code], map: "warehouses_branchId_code_key")
-  @@map("warehouses")
-}
-
-model Aisle {
-  id                  String   @id @default(cuid())
-  number              Int
-  floorNumber         Int?
-  active              Boolean  @default(true)
-  inventoryLocationId String   @map("warehouseId")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  inventoryLocation InventoryLocation @relation(fields: [inventoryLocationId], references: [id])
-  racks             Rack[]
-
-  @@unique([inventoryLocationId, number], map: "aisles_warehouseId_number_key")
-  @@map("aisles")
-}
-
-model Rack {
-  id        String   @id @default(cuid())
-  number    Int
-  active    Boolean  @default(true)
-  aisleId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  aisle             Aisle               @relation(fields: [aisleId], references: [id])
-  bundles           Bundle[]
-  outgoingMovements InventoryMovement[] @relation("MovementSourceRack")
-  incomingMovements InventoryMovement[] @relation("MovementDestinationRack")
-
-  @@unique([aisleId, number])
-  @@map("racks")
-}
-
-// CATALOG: current Reference/Finish fields are retained for API compatibility.
-
-model ProductFamily {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  references Reference[]
-
-  @@map("product_families")
-}
-
-model Reference {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  description String?
-  active      Boolean  @default(true)
-  familyId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  family   ProductFamily? @relation(fields: [familyId], references: [id])
-  bundles  Bundle[]
-  
-  @@index([familyId])
-  @@map("references")
-}
-
-model Finish {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  description String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  bundles  Bundle[]
-  
-
-  @@map("finishes")
-}
-
 
 model User {
-  id                         String   @id @default(cuid())
-  name                       String
-  email                      String   @unique
-  passwordHash               String
-  role                       UserRole @default(READ_ONLY)
-  defaultInventoryLocationId String?
-  active                     Boolean  @default(true)
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  // Login identifier, stored trimmed and lowercase.
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(OPERATOR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  defaultInventoryLocation InventoryLocation?  @relation(fields: [defaultInventoryLocationId], references: [id], onDelete: Restrict)
-  movements                InventoryMovement[]
-  tasksAssigned            Task[]              @relation("TaskAssignee")
-  tasksCreated             Task[]              @relation("TaskCreator")
+  assetsCreated Asset[]
 
-  @@index([defaultInventoryLocationId])
   @@map("users")
 }
 
-model Bundle {
-  id                   String               @id @default(cuid())
-  epc                  String               @unique
-  referenceId          String
-  finishId             String
-  quantity             Int
-  inventoryLocationId  String
-  rackId               String?
-  arrivalDate          DateTime?            @db.Date
-  arrivalYear          Int?
-  arrivalMonth         Int?
-  arrivalDatePrecision ArrivalDatePrecision @default(UNKNOWN)
-  notes                String?
-  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime             @updatedAt @db.Timestamptz(3)
+model Asset {
+  id          String   @id @default(cuid())
+  // Normalized EPC (trimmed, uppercase) as delivered by the reader; text so
+  // leading zeros are kept. No fixed length.
+  epc         String   @unique
+  name        String
+  description String?
+  category    String?
+  location    String?
+  // Administrative status: deactivating never deletes the record.
+  active      Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  reference         Reference           @relation(fields: [referenceId], references: [id], onDelete: Restrict)
-  finish            Finish              @relation(fields: [finishId], references: [id], onDelete: Restrict)
-  inventoryLocation InventoryLocation   @relation(fields: [inventoryLocationId], references: [id], onDelete: Restrict)
-  rack              Rack?               @relation(fields: [rackId], references: [id], onDelete: Restrict)
-  movements         InventoryMovement[]
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([referenceId, finishId, inventoryLocationId])
-  @@index([finishId])
-  @@index([inventoryLocationId])
-  @@index([rackId])
-  @@map("bundles")
-}
-
-model InventoryMovement {
-  id                    String                @id @default(cuid())
-  bundleId              String
-  type                  InventoryMovementType
-  quantity              Int
-  quantityBefore        Int
-  quantityAfter         Int
-  sourceLocationId      String?
-  destinationLocationId String?
-  sourceRackId          String?
-  destinationRackId     String?
-  occurredAt            DateTime              @db.Timestamptz(3)
-  performedById         String
-  reason                String?
-  operationKey          String                @unique
-  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
-
-  bundle              Bundle             @relation(fields: [bundleId], references: [id], onDelete: Restrict)
-  performedBy         User               @relation(fields: [performedById], references: [id], onDelete: Restrict)
-  sourceLocation      InventoryLocation? @relation("MovementSourceLocation", fields: [sourceLocationId], references: [id], onDelete: Restrict)
-  destinationLocation InventoryLocation? @relation("MovementDestinationLocation", fields: [destinationLocationId], references: [id], onDelete: Restrict)
-  sourceRack          Rack?              @relation("MovementSourceRack", fields: [sourceRackId], references: [id], onDelete: Restrict)
-  destinationRack     Rack?              @relation("MovementDestinationRack", fields: [destinationRackId], references: [id], onDelete: Restrict)
-
-  @@index([bundleId, occurredAt])
-  @@index([performedById])
-  @@index([type, occurredAt])
-  @@index([sourceLocationId])
-  @@index([destinationLocationId])
-  @@index([sourceRackId])
-  @@index([destinationRackId])
-  @@map("inventory_movements")
-}
-
-// TASKS: a task is assigned to one user. Employees create their own; ADMIN
-// (the boss) can assign to anyone. Status is derived, never stored:
-//   completed  -> completedAt set
-//   incomplete -> not completed and dueAt has passed (leaves the active list,
-//                 kept as history in the incomplete list)
-//   pending    -> otherwise
-model Task {
-  id           String    @id @default(cuid())
-  title        String
-  description  String?
-  dueAt        DateTime  @db.Timestamptz(3)
-  assigneeId   String
-  createdById  String
-  completedAt  DateTime? @db.Timestamptz(3)
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
-
-  assignee  User @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
-  createdBy User @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
-
-  @@index([assigneeId, completedAt, dueAt])
+  @@index([name])
+  @@index([category])
+  @@index([location])
+  @@index([active])
   @@index([createdById])
-  @@index([dueAt])
-  @@map("tasks")
+  @@map("assets")
 }

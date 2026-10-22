@@ -10,10 +10,11 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
+  // RFID Demo: port 3001 by default so it never collides with the original API.
   await app.listen(
-  Number(process.env.PORT ?? 3000),
-  process.env.HOST ?? '0.0.0.0',
-);
+    Number(process.env.PORT ?? 3001),
+    process.env.HOST ?? '0.0.0.0',
+  );
 }
 
 void bootstrap();

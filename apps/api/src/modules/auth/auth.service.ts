@@ -37,7 +37,6 @@ export class AuthService {
         email: user.email,
         role: user.role,
         active: user.active,
-        defaultInventoryLocationId: user.defaultInventoryLocationId,
       },
     };
   }

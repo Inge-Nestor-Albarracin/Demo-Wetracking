@@ -26,7 +26,7 @@ export function RegisterAssetView({ initialEpc, navigate }: { initialEpc?: strin
   const [error, setError] = useState<string | null>(null)
   const [existing, setExisting] = useState<ExistingAssetConflict['existingAsset']>(null)
   const [saved, setSaved] = useState<Asset | null>(null)
-  const epcInput = useRef<HTMLInputElement>(null)
+  const nameInput = useRef<HTMLInputElement>(null)
   // Blocks a double click before React re-renders with `saving`.
   const lock = useRef(false)
 
@@ -45,7 +45,7 @@ export function RegisterAssetView({ initialEpc, navigate }: { initialEpc?: strin
     setError(null)
     setExisting(null)
     setSaved(null)
-    requestAnimationFrame(() => epcInput.current?.focus())
+    requestAnimationFrame(() => nameInput.current?.focus())
   }
 
   const submit = async (event: FormEvent) => {
@@ -145,38 +145,15 @@ export function RegisterAssetView({ initialEpc, navigate }: { initialEpc?: strin
 
       <form className="register-layout" onSubmit={submit} noValidate>
         <div>
-          <Section number="01" title="Etiqueta RFID" description="Lee la etiqueta con el lector en modo teclado o escribe su código.">
-            <Field label="EPC / RFID" wide hint="Se guarda en mayúsculas y conserva los ceros iniciales.">
-              <span className="input-wrap large">
-                <IconScan />
-                <input
-                  ref={epcInput}
-                  className="mono"
-                  type="text"
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  autoFocus={!initialEpc}
-                  required
-                  placeholder="E2003412…"
-                  disabled={saving}
-                  value={form.epc}
-                  aria-invalid={epcInvalid}
-                  onChange={(e) => set('epc')(e.target.value.toUpperCase())}
-                />
-              </span>
-              {epcInvalid ? <span className="field-error">Solo letras y números, sin espacios.</span> : null}
-            </Field>
-          </Section>
-
-          <Section number="02" title="Objeto" description="Ejemplos: computador, monitor, silla, herramienta, equipo o caja.">
+          <Section number="01" title="Objeto" description="Ejemplos: computador, monitor, silla, herramienta, equipo o caja.">
             <Field label="Nombre del activo" wide>
               <input
                 type="text"
                 required
                 maxLength={120}
                 placeholder="Ej. Computador de demostración"
-                autoFocus={!!initialEpc}
+                ref={nameInput}
+                autoFocus
                 disabled={saving}
                 value={form.name}
                 onChange={(e) => set('name')(e.target.value)}
@@ -214,13 +191,35 @@ export function RegisterAssetView({ initialEpc, navigate }: { initialEpc?: strin
                 onChange={(e) => set('description')(e.target.value)}
               />
             </Field>
-            <div className="register-inline-actions field-wide">{actions}</div>
             <datalist id="asset-categories">
               {CATEGORY_SUGGESTIONS.map((value) => <option key={value} value={value} />)}
             </datalist>
             <datalist id="asset-locations">
               {LOCATION_SUGGESTIONS.map((value) => <option key={value} value={value} />)}
             </datalist>
+          </Section>
+
+          <Section number="02" title="Lectura RFID" description="Lee la etiqueta del objeto con el lector en modo teclado o escribe su código.">
+            <Field label="EPC / RFID" wide hint="Se guarda en mayúsculas y conserva los ceros iniciales.">
+              <span className="input-wrap large">
+                <IconScan />
+                <input
+                  className="mono"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  required
+                  placeholder="E2003412…"
+                  disabled={saving}
+                  value={form.epc}
+                  aria-invalid={epcInvalid}
+                  onChange={(e) => set('epc')(e.target.value.toUpperCase())}
+                />
+              </span>
+              {epcInvalid ? <span className="field-error">Solo letras y números, sin espacios.</span> : null}
+            </Field>
+            <div className="register-inline-actions field-wide">{actions}</div>
           </Section>
         </div>
 
@@ -233,10 +232,10 @@ export function RegisterAssetView({ initialEpc, navigate }: { initialEpc?: strin
             <dl className="summary-list">
               {(
                 [
-                  ['EPC', epc && !epcInvalid ? epc : null, true],
                   ['Nombre', form.name.trim() || null],
                   ['Categoría', form.category.trim() || null],
                   ['Ubicación', form.location.trim() || null],
+                  ['EPC', epc && !epcInvalid ? epc : null, true],
                 ] as [string, string | null, boolean?][]
               ).map(([label, value, mono]) => (
                 <div key={label}>

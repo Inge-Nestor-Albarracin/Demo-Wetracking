@@ -1,13 +1,11 @@
 import type { UserRole } from '../api/types'
 
-export const ROLES: UserRole[] = ['ADMIN', 'WAREHOUSE', 'SALES', 'READ_ONLY']
+export const ROLES: UserRole[] = ['ADMIN', 'OPERATOR']
 
-// What each role can do today (same matrix as docs/roles-permissions-idor-audit.md).
+// What each role can do in the RFID Demo (enforced by the API).
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  ADMIN: 'Todo: catálogo, ubicaciones, usuarios, ajustes de inventario y asignar tareas al equipo.',
-  WAREHOUSE: 'Registrar paquetes, salidas y traslados. Consultas de inventario y tareas propias.',
-  SALES: 'Consultas de inventario y tareas propias (el cotizador aún no está disponible).',
-  READ_ONLY: 'Solo consulta de inventario, más sus propias tareas.',
+  ADMIN: 'Registrar, consultar, editar y activar/desactivar activos; gestionar usuarios.',
+  OPERATOR: 'Registrar y consultar activos y realizar lecturas.',
 }
 
 export interface AdminUser {

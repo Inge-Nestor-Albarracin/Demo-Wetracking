@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { IconChevron } from '../components/icons'
 import type { Navigate, View } from './navigation'
 
-type Section = Exclude<View['name'], 'bundle' | 'home'>
+type Section = Exclude<View['name'], 'asset' | 'home'>
 
 interface Tile {
   name: Section
@@ -37,25 +37,13 @@ const TILE_ICONS: Record<Section, (stroke: string) => ReactNode> = {
       <path d="M33 14h9M33 20h9M35 26h7M33 32h9" />
     </g>
   ),
-  bundles: (s) => (
-    <g stroke={s}>
-      <path d="m8 16 16-8 16 8-16 8-16-8Z" />
-      <path d="m8 24 16 8 16-8M8 32l16 8 16-8" />
-    </g>
-  ),
-  summary: (s) => (
+  assets: (s) => (
     <g stroke={s}>
       <path d="M7 41h34" />
       <rect x="10" y="24" width="6" height="13" rx="1.5" />
       <rect x="21" y="12" width="6" height="25" rx="1.5" />
       <rect x="32" y="19" width="6" height="18" rx="1.5" />
       <path d="m9 15 9-6 8 4 12-7" />
-    </g>
-  ),
-  tasks: (s) => (
-    <g stroke={s}>
-      <rect x="9" y="7" width="30" height="36" rx="4" />
-      <path d="M18 7V4h12v3M15 18l3 3 5-5M15 30l3 3 5-5M27 19h6M27 31h6" />
     </g>
   ),
   admin: (s) => (
@@ -71,28 +59,22 @@ export function HomeView({
   name,
   operator,
   admin,
-  pendingQueue,
-  openTasks,
   navigate,
 }: {
   name: string
   operator: boolean
   admin: boolean
-  pendingQueue: number
-  openTasks: number
   navigate: Navigate
 }) {
   const gradient = `tile-${useId().replace(/:/g, '')}`
   const tiles: Tile[] = [
     ...(operator
-      ? [{ name: 'register' as const, title: 'Registrar', subtitle: pendingQueue > 0 ? `${pendingQueue} sin guardar` : 'Paquete nuevo', icon: TILE_ICONS.register }]
+      ? [{ name: 'register' as const, title: 'Registrar activo', subtitle: 'Asociar un EPC a un objeto', icon: TILE_ICONS.register }]
       : []),
-    { name: 'lookup', title: 'Consultar', subtitle: 'Leer chip', icon: TILE_ICONS.lookup },
-    { name: 'bulk', title: 'Lectura masiva', subtitle: 'Muchos chips a la vez', icon: TILE_ICONS.bulk },
-    { name: 'bundles', title: 'Paquetes', subtitle: 'Listado y filtros', icon: TILE_ICONS.bundles },
-    { name: 'summary', title: 'Resumen', subtitle: 'Existencias', icon: TILE_ICONS.summary },
-    { name: 'tasks', title: 'Tareas', subtitle: openTasks > 0 ? `${openTasks} ${openTasks === 1 ? 'pendiente' : 'pendientes'}` : 'Al día', icon: TILE_ICONS.tasks },
-    ...(admin ? [{ name: 'admin' as const, title: 'Administración', subtitle: 'Catálogo y usuarios', icon: TILE_ICONS.admin }] : []),
+    { name: 'bulk', title: 'Lectura masiva', subtitle: 'Muchas etiquetas a la vez', icon: TILE_ICONS.bulk },
+    { name: 'assets', title: 'Activos y resumen', subtitle: 'Listado, filtros y totales', icon: TILE_ICONS.assets },
+    { name: 'lookup', title: 'Consultar', subtitle: 'Buscar por EPC', icon: TILE_ICONS.lookup },
+    ...(admin ? [{ name: 'admin' as const, title: 'Usuarios', subtitle: 'Cuentas y roles', icon: TILE_ICONS.admin }] : []),
   ]
   const firstName = name.trim().split(/\s+/)[0] ?? ''
 
@@ -108,8 +90,8 @@ export function HomeView({
       <section className="home-banner" aria-label="Empresa">
         <span className="home-banner-pill home-banner-pill-1" aria-hidden="true" />
         <span className="home-banner-pill home-banner-pill-2" aria-hidden="true" />
-        <small>Inventario de perfiles</small>
-        <strong>Solaluminios</strong>
+        <small>Identificación de objetos con RFID</small>
+        <strong>RFID Demo</strong>
       </section>
 
       <svg width="0" height="0" className="sr-only" aria-hidden="true">

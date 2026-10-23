@@ -1,23 +1,17 @@
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react'
+import { useState, type ComponentType, type SVGProps } from 'react'
 import './App.css'
 import { BrandLogo } from './components/brand/BrandLogo'
-import { IconBulk, IconChart, IconHome, IconList, IconLogout, IconRegister, IconScan, IconSettings, IconTasks } from './components/icons'
-import { LogoutDialog } from './components/LogoutDialog'
-import { useRegistrationQueue } from './lib/registrationQueue'
-import type { TaskSummary } from './lib/tasks'
-import { useLoad } from './lib/useLoad'
+import { IconBulk, IconChart, IconHome, IconLogout, IconRegister, IconScan, IconSettings } from './components/icons'
 import { ROLE_LABELS, canOperate, useSession } from './session/session-context'
 import { AdminView } from './views/AdminView'
+import { AssetDetailView } from './views/AssetDetailView'
+import { AssetsView } from './views/AssetsView'
 import { BulkReadView, type BulkChips } from './views/BulkReadView'
-import { BundleDetailView } from './views/BundleDetailView'
-import { BundlesView } from './views/BundlesView'
 import { HomeView } from './views/HomeView'
 import { LoginView } from './views/LoginView'
 import { LookupView } from './views/LookupView'
 import type { View } from './views/navigation'
-import { RegisterBundleView } from './views/RegisterBundleView'
-import { SummaryView } from './views/SummaryView'
-import { TasksView } from './views/TasksView'
+import { RegisterAssetView } from './views/RegisterAssetView'
 
 function App() {
   const { user } = useSession()
@@ -27,7 +21,7 @@ function App() {
 }
 
 interface NavTab {
-  name: Exclude<View['name'], 'bundle'>
+  name: Exclude<View['name'], 'asset'>
   label: string
   short: string
   icon: ComponentType<SVGProps<SVGSVGElement>>
@@ -46,61 +40,32 @@ function initials(name: string) {
 function Workspace() {
   const { user, logout } = useSession()
   const operator = canOperate(user?.role)
-  // Pending registration list (not saved yet), shared by the register view,
-  // the menu badge and the logout prompt.
-  const queue = useRegistrationQueue(user?.id ?? 'anonymous')
-  const pending = queue.items.length
-  const [logoutPrompt, setLogoutPrompt] = useState(false)
-  // Bulk reading session: survives navigation (e.g. opening a bundle), not
-  // the logout (Workspace remounts per user).
+  // Bulk reading session: in memory only. Survives navigation (e.g. opening
+  // an asset), not a reload or the logout (Workspace remounts per user).
   const [bulkChips, setBulkChips] = useState<BulkChips>(() => new Map())
-
-  // Closing or reloading the tab with unsaved bundles asks for confirmation.
-  useEffect(() => {
-    if (pending === 0) return
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [pending])
-
-  // Pending tasks for the menu badge, refreshed every minute.
-  const taskSummary = useLoad<TaskSummary>('/tasks/summary')
-  const { reload: reloadTaskSummary } = taskSummary
-  useEffect(() => {
-    const id = window.setInterval(reloadTaskSummary, 60_000)
-    return () => window.clearInterval(id)
-  }, [reloadTaskSummary])
-  const openTasks = taskSummary.data?.pending ?? 0
-
-  const requestLogout = () => (pending > 0 ? setLogoutPrompt(true) : logout())
   const [view, setView] = useState<View>({ name: 'home' })
-  // Remount register/bundles when they receive initial values (EPC, filters).
+  // Remount register/assets when they receive initial values (EPC, filters).
   const [remountKey, setRemountKey] = useState(0)
 
   const navigate = (next: View) => {
-    if (next.name === 'register' || next.name === 'bundles') setRemountKey((k) => k + 1)
+    if (next.name === 'register' || next.name === 'assets') setRemountKey((k) => k + 1)
     setView(next)
     window.scrollTo({ top: 0 })
   }
 
   const tabs: NavTab[] = [
     { name: 'home', label: 'Inicio', short: 'Inicio', icon: IconHome },
-    ...(operator ? [{ name: 'register' as const, label: 'Registrar paquete', short: 'Registrar', icon: IconRegister }] : []),
-    { name: 'lookup', label: 'Consultar chip', short: 'Chip', icon: IconScan },
-    // Not in the phone bottom bar (already full): reached from Inicio and
-    // from "Consultar chip".
-    { name: 'bulk', label: 'Lectura masiva', short: 'Masiva', icon: IconBulk, bottom: false },
-    { name: 'bundles', label: 'Paquetes', short: 'Paquetes', icon: IconList },
-    { name: 'summary', label: 'Resumen', short: 'Resumen', icon: IconChart },
-    { name: 'tasks', label: 'Tareas', short: 'Tareas', icon: IconTasks },
+    ...(operator ? [{ name: 'register' as const, label: 'Registrar activo', short: 'Registrar', icon: IconRegister }] : []),
+    { name: 'bulk', label: 'Lectura masiva', short: 'Lectura', icon: IconBulk },
+    { name: 'assets', label: 'Activos y resumen', short: 'Activos', icon: IconChart },
+    { name: 'lookup', label: 'Consultar EPC', short: 'Consultar', icon: IconScan },
     // UI hint only: the API enforces ADMIN on every admin endpoint.
-    ...(user?.role === 'ADMIN' ? [{ name: 'admin' as const, label: 'Administración', short: 'Admin', icon: IconSettings }] : []),
+    ...(user?.role === 'ADMIN'
+      ? [{ name: 'admin' as const, label: 'Usuarios', short: 'Usuarios', icon: IconSettings, bottom: false as const }]
+      : []),
   ]
-  // The bundle detail belongs to the section the user came from; highlight lookup.
-  const current = view.name === 'bundle' ? 'lookup' : view.name
+  // The asset detail belongs to the asset list.
+  const current = view.name === 'asset' ? 'assets' : view.name
 
   const navButtons = (variant: 'side' | 'bottom' | 'top') =>
     tabs.filter((tab) => variant !== 'bottom' || tab.bottom !== false).map((tab) => {
@@ -116,18 +81,6 @@ function Workspace() {
         >
           <Icon />
           <span>{variant === 'bottom' ? tab.short : tab.label}</span>
-          {tab.name === 'register' && pending > 0 ? (
-            <span className="nav-badge" title={`${pending} paquetes sin guardar`}>
-              {pending}
-              <span className="sr-only"> sin guardar</span>
-            </span>
-          ) : null}
-          {tab.name === 'tasks' && openTasks > 0 ? (
-            <span className="nav-badge nav-badge-info" title={`${openTasks} tareas pendientes`}>
-              {openTasks}
-              <span className="sr-only"> pendientes</span>
-            </span>
-          ) : null}
         </button>
       )
     })
@@ -139,8 +92,8 @@ function Workspace() {
           <BrandLogo variant="full" tone="negative" title="WeTracking" />
         </button>
         <div className="sidebar-client">
-          <small>Inventario</small>
-          <strong>Solaluminios</strong>
+          <small>Demostración</small>
+          <strong>RFID Demo</strong>
         </div>
         <nav className="nav-side">{navButtons('side')}</nav>
         <div className="sidebar-user">
@@ -149,7 +102,7 @@ function Workspace() {
             <strong>{user?.name}</strong>
             <small>{user ? ROLE_LABELS[user.role] : ''}</small>
           </span>
-          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={requestLogout}>
+          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => logout()}>
             <IconLogout />
           </button>
         </div>
@@ -160,8 +113,8 @@ function Workspace() {
           <BrandLogo className="topbar-logo" variant="minimal" tone="negative" title="WeTracking" />
           <BrandLogo className="topbar-mark" variant="mark" tone="negative" title="WeTracking" />
           <span className="topbar-client">
-            <small>Inventario</small>
-            <strong>Solaluminios</strong>
+            <small>Demostración</small>
+            <strong>RFID Demo</strong>
           </span>
         </button>
         <div className="topbar-user">
@@ -170,7 +123,7 @@ function Workspace() {
             <small>{user ? ROLE_LABELS[user.role] : ''}</small>
           </span>
           <span className="avatar" aria-hidden="true">{initials(user?.name ?? '')}</span>
-          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={requestLogout}>
+          <button type="button" className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => logout()}>
             <IconLogout />
           </button>
         </div>
@@ -179,47 +132,17 @@ function Workspace() {
 
       <main className="content">
         {view.name === 'home' ? (
-          <HomeView
-            name={user?.name ?? ''}
-            operator={operator}
-            admin={user?.role === 'ADMIN'}
-            pendingQueue={pending}
-            openTasks={openTasks}
-            navigate={navigate}
-          />
+          <HomeView name={user?.name ?? ''} operator={operator} admin={user?.role === 'ADMIN'} navigate={navigate} />
         ) : null}
-        {view.name === 'register' ? (
-          <RegisterBundleView key={remountKey} initialEpc={view.epc} navigate={navigate} queue={queue} />
-        ) : null}
+        {view.name === 'register' ? <RegisterAssetView key={remountKey} initialEpc={view.epc} navigate={navigate} /> : null}
         {view.name === 'lookup' ? <LookupView navigate={navigate} /> : null}
         {view.name === 'bulk' ? <BulkReadView navigate={navigate} chips={bulkChips} setChips={setBulkChips} /> : null}
-        {view.name === 'bundles' ? (
-          <BundlesView key={remountKey} navigate={navigate} initialCatalog={view.catalog} />
-        ) : null}
-        {view.name === 'summary' ? <SummaryView navigate={navigate} /> : null}
-        {view.name === 'tasks' ? <TasksView onChanged={reloadTaskSummary} /> : null}
+        {view.name === 'assets' ? <AssetsView key={remountKey} navigate={navigate} initialFilters={view.filters} /> : null}
         {view.name === 'admin' && user?.role === 'ADMIN' ? <AdminView /> : null}
-        {view.name === 'bundle' ? <BundleDetailView key={view.id} id={view.id} navigate={navigate} /> : null}
+        {view.name === 'asset' ? <AssetDetailView key={view.id} id={view.id} navigate={navigate} /> : null}
       </main>
 
       <nav className="nav-bottom" aria-label="Secciones">{navButtons('bottom')}</nav>
-
-      {logoutPrompt ? (
-        <LogoutDialog
-          pending={pending}
-          canKeep={queue.status !== 'unavailable'}
-          onCancel={() => setLogoutPrompt(false)}
-          onReview={() => {
-            setLogoutPrompt(false)
-            navigate({ name: 'register' })
-          }}
-          onKeep={() => logout()}
-          onDiscard={() => {
-            queue.clear()
-            logout()
-          }}
-        />
-      ) : null}
     </div>
   )
 }

@@ -1,14 +1,12 @@
-import type { CatalogValue } from '../lib/forms'
+import type { AssetFilters } from '../lib/assets'
 
 export type View =
   | { name: 'home' }
   | { name: 'register'; epc?: string }
   | { name: 'lookup' }
   | { name: 'bulk' }
-  | { name: 'bundles'; catalog?: Partial<CatalogValue> }
-  | { name: 'summary' }
-  | { name: 'tasks' }
+  | { name: 'assets'; filters?: Partial<AssetFilters> }
   | { name: 'admin' }
-  | { name: 'bundle'; id: string }
+  | { name: 'asset'; id: string }
 
 export type Navigate = (view: View) => void

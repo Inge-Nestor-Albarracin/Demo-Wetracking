@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError, describeError } from '../api/client'
-import type { BundleDetail } from '../api/types'
+import type { Asset } from '../api/types'
 import { IconArrow, IconScan } from '../components/icons'
 import { Field, Notice, PageHeader } from '../components/ui'
+import { EPC_PATTERN, normalizeEpc } from '../lib/assets'
 import { canOperate, useSession } from '../session/session-context'
 import type { Navigate } from './navigation'
 
-// Exact EPC lookup. Reading never creates or changes inventory.
+// Exact EPC lookup. Reading never creates or changes assets.
 export function LookupView({ navigate }: { navigate: Navigate }) {
   const { request, user } = useSession()
   const [epc, setEpc] = useState('')
@@ -16,14 +17,18 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    const value = epc.trim().toUpperCase()
+    const value = normalizeEpc(epc)
     if (!value || pending) return
+    if (!EPC_PATTERN.test(value)) {
+      setError('El EPC solo puede contener letras y números, sin espacios.')
+      return
+    }
     setPending(true)
     setError(null)
     setNotFound(null)
     try {
-      const { data } = await request<BundleDetail>(`/inventory/bundles/epc/${encodeURIComponent(value)}`)
-      navigate({ name: 'bundle', id: data.id })
+      const { data } = await request<Asset>(`/assets/by-epc/${encodeURIComponent(value)}`)
+      navigate({ name: 'asset', id: data.id })
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(value)
       else setError(describeError(err))
@@ -34,12 +39,12 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
   return (
     <>
       <PageHeader
-        eyebrow="Inventario · Consulta"
-        title="Consultar por chip"
-        description="Lee la etiqueta del paquete o escribe su código para ver referencia, acabado, ubicación, saldo y movimientos."
+        eyebrow="Activos · Consulta"
+        title="Consultar por EPC"
+        description="Lee la etiqueta del objeto o escribe su código para ver el activo asociado."
         actions={
           <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'bulk' })}>
-            Leer varios chips
+            Lectura masiva
           </button>
         }
       />
@@ -49,11 +54,11 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
         <Notice kind="info">
           <div className="notfound">
             <span>
-              No hay un paquete registrado con el chip <strong className="mono">{notFound}</strong>.
+              No hay un activo registrado con el EPC <strong className="mono">{notFound}</strong>.
             </span>
             {canOperate(user?.role) ? (
               <button type="button" className="button button-secondary" onClick={() => navigate({ name: 'register', epc: notFound })}>
-                Registrar con este chip
+                Registrar activo con este EPC
               </button>
             ) : null}
           </div>
@@ -62,7 +67,7 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
 
       <form className="card lookup-card" onSubmit={submit}>
         <div className="lookup-form">
-          <Field label="Código del chip" hint="Coincidencia exacta; mayúsculas y minúsculas dan igual.">
+          <Field label="EPC / RFID" hint="Coincidencia exacta; mayúsculas y minúsculas dan igual.">
             <span className="input-wrap large">
               <IconScan />
               <input
@@ -83,37 +88,13 @@ export function LookupView({ navigate }: { navigate: Navigate }) {
             </span>
           </Field>
           <button type="submit" className="cta" disabled={pending || !epc.trim()}>
-            <span aria-live="polite">{pending ? 'Buscando…' : 'Buscar paquete'}</span>
+            <span aria-live="polite">{pending ? 'Buscando…' : 'Buscar activo'}</span>
             <span className="cta-icon" aria-hidden="true">
               {pending ? <span className="cta-progress" /> : <IconArrow />}
             </span>
           </button>
         </div>
       </form>
-
-      <div className="lookup-tips">
-        <div>
-          <span aria-hidden="true">01</span>
-          <p>
-            <strong>Lee la etiqueta</strong>
-            <small>Con el campo activo, el lector en modo teclado escribe el código del chip.</small>
-          </p>
-        </div>
-        <div>
-          <span aria-hidden="true">02</span>
-          <p>
-            <strong>Revisa el paquete</strong>
-            <small>Saldo actual, ubicación e historial de movimientos.</small>
-          </p>
-        </div>
-        <div>
-          <span aria-hidden="true">03</span>
-          <p>
-            <strong>Registra operaciones</strong>
-            <small>Salidas, traslados o ajustes según tu rol.</small>
-          </p>
-        </div>
-      </div>
     </>
   )
 }

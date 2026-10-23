@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'WAREHOUSE' | 'SALES' | 'READ_ONLY'
+export type UserRole = 'ADMIN' | 'OPERATOR'
 
 export interface SessionUser {
   id: string
@@ -6,7 +6,6 @@ export interface SessionUser {
   email: string
   role: UserRole
   active: boolean
-  defaultInventoryLocationId: string | null
 }
 
 export interface LoginResponse {
@@ -16,141 +15,44 @@ export interface LoginResponse {
   user: SessionUser
 }
 
-export interface Family {
-  id: string
-  code: string
-  name: string
-  active: boolean
-  // Version used for conflict-safe edits (expectedUpdatedAt).
-  updatedAt?: string
-}
-
-export interface Reference {
-  id: string
-  code: string
-  description: string | null
-  active: boolean
-  familyId: string | null
-  updatedAt?: string
-}
-
-export interface Finish {
-  id: string
-  code: string
-  description: string | null
-  active: boolean
-}
-
-export interface Branch {
-  id: string
-  code: string
-  name: string
-}
-
-export interface InventoryLocation {
-  id: string
-  code: string
-  name: string
-  type: 'WAREHOUSE' | 'RETAIL_STORE'
-}
-
-export interface Aisle {
-  id: string
-  number: number
-  floorNumber: number | null
-}
-
-export interface Rack {
-  id: string
-  number: number
-}
-
-export type ArrivalDatePrecision = 'EXACT' | 'MONTH' | 'UNKNOWN'
-export type MovementType =
-  | 'INITIAL_STOCK'
-  | 'ENTRY'
-  | 'EXIT'
-  | 'TRANSFER'
-  | 'ADJUSTMENT_IN'
-  | 'ADJUSTMENT_OUT'
-
-export interface Bundle {
+// One object tagged with one EPC.
+export interface Asset {
   id: string
   epc: string
-  quantity: number
-  arrivalDate: string | null
-  arrivalYear: number | null
-  arrivalMonth: number | null
-  arrivalDatePrecision: ArrivalDatePrecision
-  notes: string | null
+  name: string
+  description: string | null
+  category: string | null
+  location: string | null
+  // Administrative status: an inactive asset is still registered.
+  active: boolean
   createdAt: string
-  inventoryLocationId: string
-  rackId: string | null
-  reference: Reference & { family: Pick<Family, 'id' | 'code' | 'name'> | null }
-  finish: Finish
-  inventoryLocation: InventoryLocation & { branch: Branch }
-  rack: (Rack & { aisle: Aisle }) | null
+  updatedAt: string
+  createdBy: { id: string; name: string }
 }
 
-export interface MovementPlace {
-  id: string
-  code?: string
-  name?: string
-  number?: number
-  aisle?: Aisle
+export interface StatusCounts {
+  total: number
+  active: number
+  inactive: number
 }
 
-export interface Movement {
-  id: string
-  type: MovementType
-  quantity: number
-  quantityBefore: number
-  quantityAfter: number
-  occurredAt: string
-  reason: string | null
-  performedBy: { id: string; name: string; role: UserRole }
-  sourceLocation?: MovementPlace | null
-  destinationLocation?: MovementPlace | null
-  sourceRack?: MovementPlace | null
-  destinationRack?: MovementPlace | null
-}
-
-export interface BundleDetail extends Bundle {
-  movements: Movement[]
-}
-
-export interface Page<T> {
-  items: T[]
+export interface AssetPage {
+  items: Asset[]
   page: number
   pageSize: number
-  total: number
   totalPages: number
+  // Same conditions as `items`.
+  filtered: StatusCounts
+  // Every registered asset, whatever the filters.
+  totals: StatusCounts
 }
 
-export interface SummaryLocation {
-  inventoryLocation: InventoryLocation & { branch: Branch }
-  aisle: Aisle | null
-  rack: Rack | null
-  profiles: number
-  bundles: number
+export interface ResolveResult {
+  found: Asset[]
+  unknown: string[]
 }
 
-export interface SummaryGroup {
-  reference: Pick<Reference, 'id' | 'code' | 'description' | 'active'> & {
-    family: Pick<Family, 'id' | 'code' | 'name'> | null
-  }
-  finish: Finish
-  profiles: number
-  bundles: number
-  locations: SummaryLocation[]
-}
-
-export interface SummaryPage extends Page<SummaryGroup> {
-  totals: { profiles: number; bundles: number }
-}
-
-export interface OperationResult {
-  replayed: boolean
-  movement: Movement
-  bundle: BundleDetail
+// 409 body of POST /assets.
+export interface ExistingAssetConflict {
+  existingAsset: { id: string; name: string; active: boolean } | null
 }

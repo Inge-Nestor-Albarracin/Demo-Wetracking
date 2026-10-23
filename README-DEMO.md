@@ -73,6 +73,26 @@ contraseñas de cuentas existentes.
 
 ## Volver a iniciar la demo
 
+Desde la raíz, abre dos terminales de PowerShell:
+
+```powershell
+# Terminal 1: API
+pnpm.cmd dev:api
+```
+
+```powershell
+# Terminal 2: web
+pnpm.cmd dev:web
+```
+
+Abre `http://localhost:5174`. `pnpm.cmd` evita el bloqueo de `pnpm.ps1`
+cuando PowerShell tiene deshabilitada la ejecución de scripts, sin cambiar
+la política de Windows. La raíz no tiene un script `dev`; dentro de
+`apps/api` el comando es `pnpm.cmd start:dev`, no `pnpm start run:dev`.
+Si aparece `EADDRINUSE` en 3001 o `Port 5174 is already in use`, comprueba
+si la demo ya está abierta. Para reiniciar, detén primero el servidor en
+su terminal con Ctrl+C.
+
 ```powershell
 cd "C:\Users\ASUS\Videos\We tracking demo\apps\api"
 pnpm db:check        # confirma rfid_demo y que los datos siguen ahí
@@ -105,9 +125,38 @@ pnpm test:db:setup                   # crea rfid_demo_test si falta (CREATE DATA
 pnpm test:e2e                        # e2e solo contra rfid_demo_test
 ```
 
+## Frontend (`apps/web`, http://localhost:5174)
+
+```powershell
+cd "C:\Users\ASUS\Videos\We tracking demo"
+pnpm --dir apps/api start     # API en 3001 (compila antes de escuchar: espera el log "Nest application successfully started")
+pnpm --dir apps/web dev       # web en 5174 (strictPort)
+```
+
+`VITE_API_URL` es opcional; por defecto el frontend llama a `http://localhost:3001`.
+
+Pantallas: **Inicio**, **Registrar activo** (EPC, nombre, categoría,
+ubicación y descripción), **Lectura masiva**, **Activos y resumen** (filtros
+por nombre, EPC, categoría, ubicación y estado, con totales y paginación),
+**Consultar EPC**, detalle del activo (solo ADMIN edita o activa/desactiva) y
+**Usuarios** (solo ADMIN).
+
+Lectura masiva:
+- Lector real: pistola Chafon H100/H102/H103 por Web Bluetooth (Chrome con
+  HTTPS o localhost) o en modo teclado (HID). No se ha comprobado con la pistola
+  en esta copia.
+- Simulación: «Modo teclado, código manual o simulación» → «Simular lectura».
+  Lee los 10 EPC de la semilla y un EPC desconocido (`D3E0…00FF`) varias veces.
+  La sesión queda marcada como simulada.
+- Evento de lectura: cada detección con código no vacío. Los EPC únicos son
+  los registrados detectados más los desconocidos, y las repeticiones son los
+  eventos menos los EPC únicos.
+- La sesión vive en memoria y se borra al recargar, al cerrar la página o al
+  cerrar sesión. Leer no crea ni modifica activos.
+
 ## Pendiente
 
-El frontend (`apps/web`) todavía usa las pantallas y endpoints del negocio
-anterior, y su puerto aún no está ajustado a 5174. Se adaptará en la
-siguiente tarea: registrar activo, lectura masiva con el SDK o en modo
-simulado, y activos y resumen.
+- Registrar un activo con la pistola en modo Bluetooth: en el formulario se
+  usa el modo teclado o se escribe el código, y desde Lectura masiva se abre
+  el registro con el EPC desconocido ya cargado.
+- Las pruebas e2e del API necesitan crear `rfid_demo_test`.

@@ -27,15 +27,10 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.',
 }
 
-// The API says "EPC"; users know it as "chip". Only the displayed text changes.
-function userWording(text: string): string {
-  return text.replace(/\bestos EPC\b/g, 'estos chips').replace(/\bEPC\b/g, 'chip')
-}
-
 function errorMessage(status: number, data: unknown): string {
   const message = (data as { message?: unknown } | null)?.message
-  if (typeof message === 'string' && message) return userWording(message)
-  if (Array.isArray(message) && message.length) return userWording(message.join('. '))
+  if (typeof message === 'string' && message) return message
+  if (Array.isArray(message) && message.length) return message.join('. ')
   return STATUS_MESSAGES[status] ?? 'Ocurrió un error en el servidor. Inténtalo de nuevo.'
 }
 

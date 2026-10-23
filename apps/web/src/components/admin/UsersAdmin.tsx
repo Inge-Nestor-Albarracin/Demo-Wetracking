@@ -172,7 +172,7 @@ function NewUserForm({ onCreated }: { onCreated: (user: AdminUser) => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [role, setRole] = useState<UserRole>('WAREHOUSE')
+  const [role, setRole] = useState<UserRole>('OPERATOR')
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null)
   const create = useMutation()
 

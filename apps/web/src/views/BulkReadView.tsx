@@ -9,17 +9,18 @@ import {
   type SetStateAction,
 } from 'react'
 import { ApiError, describeError } from '../api/client'
-import type { Bundle } from '../api/types'
+import type { Asset, ResolveResult } from '../api/types'
+import { AssetStatus } from '../components/AssetStatus'
 import { IconScan } from '../components/icons'
 import { Empty, Field, Kpi, Notice, PageHeader } from '../components/ui'
 import type { TagRead } from '../lib/chafon'
-import { bundlePlace, finishLabel, referenceLabel } from '../lib/format'
+import { formatTime } from '../lib/format'
 import { useChafonReader, type ReaderPower } from '../lib/useChafonReader'
 import { canOperate, useSession } from '../session/session-context'
 import type { Navigate } from './navigation'
 
 const EPC_PATTERN = /^[A-Z0-9]{1,128}$/
-// Chips sent per lookup request (API limit: 200).
+// EPCs sent per resolve request (API limit: 200).
 const LOOKUP_BATCH = 200
 // Unique chips kept per session, to bound memory and requests.
 const MAX_CHIPS = 3000
@@ -28,27 +29,33 @@ const RETRY_MS = 3000
 
 type ChipState = 'pending' | 'found' | 'missing' | 'invalid' | 'error'
 
+// Simulation (no reader): the demo seed EPCs plus one unknown EPC, each read
+// a few times, fed through the same processing as real reads.
+const SIMULATED_EPCS = [
+  ...Array.from({ length: 10 }, (_, i) => `D3E0${(i + 1).toString(16).toUpperCase().padStart(20, '0')}`),
+  'D3E0000000000000000000FF',
+]
+
+// One row per unique EPC. A read event is one valid detection (non-empty
+// code) delivered by the reader or typed; `reads` counts them per EPC.
 export interface BulkChip {
   epc: string
   reads: number
   rssi: number | null
+  firstSeen: number
+  lastSeen: number
   state: ChipState
-  bundle?: Bundle
+  asset?: Asset
 }
 
-// Read chips in read order (Map insertion order). Kept by the workspace so
-// opening a bundle and coming back does not lose the session; cleared on
-// logout.
+// Unique EPCs in read order (Map insertion order). Kept in memory by the
+// workspace so opening an asset and coming back does not lose the session;
+// cleared on logout and when the page is reloaded or closed.
 export type BulkChips = Map<string, BulkChip>
 type Chip = BulkChip
 
-interface LookupResult {
-  bundles: Bundle[]
-  missing: string[]
-}
-
 // Quick choices as a share of the model's maximum power (H103: 12 / 21 / 33
-// dBm). Less power, shorter range: fewer neighbouring bundles read by mistake.
+// dBm). Less power, shorter range: fewer neighbouring objects read by mistake.
 function rangePresets(min: number, max: number) {
   return [
     { label: 'Corta', hint: 'Solo lo cercano', value: Math.max(min, Math.round(max * 0.35)) },
@@ -141,14 +148,14 @@ function ReadRange({
             ? 'Guardando en la pistola…'
             : power.saved
               ? `Distancia guardada en la pistola: ${current} dBm.`
-              : `Potencia actual: ${current} de ${power.max} dBm${power.model ? ` (${power.model})` : ''}. Menos distancia evita leer paquetes vecinos.`}
+              : `Potencia actual: ${current} de ${power.max} dBm${power.model ? ` (${power.model})` : ''}. Menos distancia evita leer objetos vecinos.`}
       </small>
     </fieldset>
   )
 }
 
-// Bulk RFID reading: many chips at once, each shown with its reference.
-// Read-only: nothing is registered or changed in the inventory.
+// Bulk RFID reading: many tags at once, each shown with its asset.
+// Read-only: nothing is registered or changed in the database.
 export function BulkReadView({
   navigate,
   chips,
@@ -163,9 +170,12 @@ export function BulkReadView({
   const [manual, setManual] = useState('')
   const [lookupError, setLookupError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'found' | 'missing'>('all')
+  const [search, setSearch] = useState('')
+  // Reads typed by the simulation are never attributed to the reader.
+  const [simulated, setSimulated] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [retryTick, setRetryTick] = useState(0)
-  const buffer = useRef<{ epc: string; rssi: number | null }[]>([])
+  const buffer = useRef<{ epc: string; rssi: number | null; at: number }[]>([])
   const flushTimer = useRef<number | null>(null)
   const inFlight = useRef(false)
   const blockedUntil = useRef(0)
@@ -179,10 +189,10 @@ export function BulkReadView({
     if (reads.length === 0) return
     setChips((previous) => {
       const next = new Map(previous)
-      for (const { epc, rssi } of reads) {
+      for (const { epc, rssi, at } of reads) {
         const chip = next.get(epc)
         if (chip) {
-          next.set(epc, { ...chip, reads: chip.reads + 1, rssi: rssi ?? chip.rssi })
+          next.set(epc, { ...chip, reads: chip.reads + 1, rssi: rssi ?? chip.rssi, lastSeen: at })
           continue
         }
         if (next.size >= MAX_CHIPS) continue
@@ -190,6 +200,8 @@ export function BulkReadView({
           epc,
           reads: 1,
           rssi,
+          firstSeen: at,
+          lastSeen: at,
           state: EPC_PATTERN.test(epc) ? 'pending' : 'invalid',
         })
       }
@@ -201,7 +213,7 @@ export function BulkReadView({
     (raw: string, rssi: number | null) => {
       const epc = raw.trim().toUpperCase()
       if (!epc) return
-      buffer.current.push({ epc, rssi })
+      buffer.current.push({ epc, rssi, at: Date.now() })
       if (flushTimer.current === null) flushTimer.current = window.setTimeout(flush, FLUSH_MS)
     },
     [flush],
@@ -217,7 +229,8 @@ export function BulkReadView({
     [],
   )
 
-  // Looks up new chips in batches, one request at a time.
+  // Resolves new EPCs in batches, one request at a time; repeated reads of a
+  // known EPC never trigger another request.
   const pending = useMemo(() => [...chips.values()].filter((chip) => chip.state === 'pending').map((chip) => chip.epc), [chips])
   useEffect(() => {
     // After a temporary failure, new reads wait for the retry instead of
@@ -228,16 +241,18 @@ export function BulkReadView({
     let retry: number | null = null
     void (async () => {
       try {
-        const { data } = await request<LookupResult>('/inventory/bundles/lookup', { method: 'POST', body: { epcs: batch } })
-        const found = new Map(data.bundles.map((bundle) => [bundle.epc, bundle]))
+        const { data } = await request<ResolveResult>('/assets/resolve', { method: 'POST', body: { epcs: batch } })
+        const found = new Map(data.found.map((asset) => [asset.epc, asset]))
         setLookupError(null)
         setChips((previous) => {
           const next = new Map(previous)
           for (const epc of batch) {
             const chip = next.get(epc)
-            if (!chip) continue
-            const bundle = found.get(epc)
-            next.set(epc, bundle ? { ...chip, state: 'found', bundle } : { ...chip, state: 'missing', bundle: undefined })
+            // Cleared meanwhile, or already resolved: a late answer never
+            // brings back a row of a cleared session.
+            if (!chip || chip.state !== 'pending') continue
+            const asset = found.get(epc)
+            next.set(epc, asset ? { ...chip, state: 'found', asset } : { ...chip, state: 'missing', asset: undefined })
           }
           return next
         })
@@ -282,13 +297,24 @@ export function BulkReadView({
 
   const submitManual = (event: FormEvent) => {
     event.preventDefault()
-    // HID readers type each chip followed by Enter; a pasted list also works.
+    // HID readers type each EPC followed by Enter; a pasted list also works.
     for (const code of manual.split(/[\s,;]+/)) addRead(code, null)
     setManual('')
   }
 
+  const simulate = () => {
+    setSimulated(true)
+    for (const epc of SIMULATED_EPCS) {
+      const times = 1 + Math.floor(Math.random() * 4)
+      for (let i = 0; i < times; i += 1) addRead(epc, null)
+    }
+  }
+
   const clear = () => {
+    setSimulated(false)
     buffer.current = []
+    if (flushTimer.current !== null) window.clearTimeout(flushTimer.current)
+    flushTimer.current = null
     setChips(new Map())
     setLookupError(null)
     setConfirmClear(false)
@@ -299,21 +325,29 @@ export function BulkReadView({
   const full = chips.size >= MAX_CHIPS
   const found = list.filter((chip) => chip.state === 'found')
   const missing = list.filter((chip) => chip.state === 'missing' || chip.state === 'invalid')
-  const profiles = found.reduce((sum, chip) => sum + (chip.bundle?.quantity ?? 0), 0)
-  const visible = filter === 'found' ? found : filter === 'missing' ? missing : list
+  // Counters: unique EPCs = registered detected + unknown + still resolving.
+  const events = list.reduce((sum, chip) => sum + chip.reads, 0)
+  const repeats = events - list.length
+  const byFilter = filter === 'found' ? found : filter === 'missing' ? missing : list
+  const query = search.trim().toUpperCase()
+  const visible = query
+    ? byFilter.filter((chip) =>
+        [chip.epc, chip.asset?.name, chip.asset?.category, chip.asset?.location].some((text) => text?.toUpperCase().includes(query)),
+      )
+    : byFilter
 
-  // Grouped by reference + finish: the quick answer to "what did I read?".
+  // Grouped by category: the quick answer to "what did I read?".
   const groups = useMemo(() => {
-    const map = new Map<string, { reference: string; finish: string; bundles: number; profiles: number }>()
+    const map = new Map<string, { category: string; assets: number; inactive: number }>()
     for (const chip of found) {
-      const bundle = chip.bundle!
-      const key = `${bundle.reference.id}|${bundle.finish.id}`
-      const group = map.get(key) ?? { reference: referenceLabel(bundle.reference), finish: finishLabel(bundle.finish), bundles: 0, profiles: 0 }
-      group.bundles += 1
-      group.profiles += bundle.quantity
-      map.set(key, group)
+      const asset = chip.asset!
+      const category = asset.category ?? 'Sin categoría'
+      const group = map.get(category) ?? { category, assets: 0, inactive: 0 }
+      group.assets += 1
+      if (!asset.active) group.inactive += 1
+      map.set(category, group)
     }
-    return [...map.values()].sort((a, b) => b.bundles - a.bundles)
+    return [...map.values()].sort((a, b) => b.assets - a.assets)
   }, [found])
 
   const connected = reader.status === 'connected'
@@ -321,10 +355,14 @@ export function BulkReadView({
   return (
     <>
       <PageHeader
-        eyebrow="Inventario · RFID"
+        eyebrow="Activos · RFID"
         title="Lectura masiva"
-        description="Lee muchos paquetes a la vez con la pistola Chafon y ve la referencia de cada chip. Solo consulta: no registra ni cambia el inventario."
+        description="Lee muchas etiquetas a la vez con la pistola Chafon y ve qué activo corresponde a cada EPC. Solo consulta: no registra ni cambia activos."
       />
+      <Notice kind="info">
+        La sesión de lectura se guarda solo en esta pestaña mientras navegas por la aplicación: se borra al recargar,
+        cerrar la página o cerrar sesión. No es un historial.
+      </Notice>
 
       <div className="bulk-layout">
         <section className="card bulk-reader" aria-label="Lector">
@@ -343,7 +381,7 @@ export function BulkReadView({
               <small>
                 {connected
                   ? reader.reading || reader.trigger
-                    ? 'Leyendo chips…'
+                    ? 'Leyendo etiquetas…'
                     : 'Listo: aprieta el gatillo o pulsa «Iniciar lectura».'
                   : reader.status === 'unsupported'
                     ? 'Usa Chrome en Android o en computador (con HTTPS), o el modo teclado.'
@@ -396,12 +434,12 @@ export function BulkReadView({
           {/* Collapsed when Bluetooth is available, to keep the results close
               on phones; always open otherwise (it is the only way to read). */}
           <details className="bulk-manual" open={reader.status === 'unsupported' || undefined}>
-            <summary>Modo teclado o código manual</summary>
+            <summary>Modo teclado, código manual o simulación</summary>
           <form onSubmit={submitManual}>
             <Field
-              label="Código del chip"
+              label="EPC"
               wide
-              hint="Si la pistola está en modo HID (teclado), deja el cursor aquí: cada chip leído se agrega solo. También puedes pegar varios códigos."
+              hint="Si la pistola está en modo HID (teclado), deja el cursor aquí: cada etiqueta leída se agrega sola. También puedes pegar varios códigos."
             >
               <span className="input-wrap">
                 <IconScan />
@@ -426,19 +464,31 @@ export function BulkReadView({
               </span>
             </Field>
           </form>
+          <div className="bulk-sim">
+            <button type="button" className="button button-secondary" onClick={simulate}>
+              Simular lectura
+            </button>
+            <small>Modo simulación: agrega EPC de ejemplo (registrados, uno inactivo y uno desconocido) con repeticiones, sin usar el lector.</small>
+          </div>
           </details>
         </section>
 
         <div className="kpis bulk-kpis">
-          <Kpi label="Chips leídos" value={list.length} hint={pending.length > 0 ? `${pending.length} consultando…` : 'Sin repetir'} dark />
-          <Kpi label="Registrados" value={found.length} hint={`${profiles} perfiles`} />
-          <Kpi label="No registrados" value={missing.length} hint="Chips sin paquete" />
+          <Kpi label="EPC únicos" value={list.length} hint={pending.length > 0 ? `${pending.length} consultando…` : 'Cada etiqueta una vez'} dark />
+          <Kpi label="Activos registrados detectados" value={found.length} hint={`${found.filter((chip) => !chip.asset?.active).length} inactivos`} />
+          <Kpi label="EPC desconocidos" value={missing.length} hint="Sin activo en la base" />
+          <Kpi label="Eventos de lectura" value={events} hint={`${repeats} repeticiones`} />
         </div>
       </div>
 
+      {simulated && list.length > 0 ? (
+        <Notice kind="warning">
+          <strong>Modo simulación.</strong> Esta sesión incluye lecturas simuladas: no provienen de la pistola.
+        </Notice>
+      ) : null}
       {full ? (
         <Notice kind="warning">
-          Se alcanzó el máximo de {MAX_CHIPS} chips en pantalla; las lecturas nuevas no se agregan. Limpia la lista para
+          Se alcanzó el máximo de {MAX_CHIPS} EPC en pantalla; las lecturas nuevas no se agregan. Limpia la lista para
           seguir.
         </Notice>
       ) : null}
@@ -453,23 +503,22 @@ export function BulkReadView({
 
       {list.length === 0 ? (
         <Empty title="Aún no hay lecturas">
-          Conecta la pistola y aprieta el gatillo cerca de los paquetes, o usa el modo teclado.
+          Conecta la pistola y aprieta el gatillo cerca de los objetos, o usa el modo teclado o la simulación.
         </Empty>
       ) : (
         <>
           {groups.length > 0 ? (
-            <section className="bulk-groups" aria-label="Resumen por referencia">
-              <h2 className="subtitle">Por referencia</h2>
+            <section className="bulk-groups" aria-label="Resumen por categoría">
+              <h2 className="subtitle">Por categoría</h2>
               <ul>
                 {groups.map((group) => (
-                  <li key={`${group.reference}|${group.finish}`}>
+                  <li key={group.category}>
                     <span>
-                      <strong>{group.reference}</strong>
-                      <small>{group.finish}</small>
+                      <strong>{group.category}</strong>
                     </span>
                     <span className="bulk-group-count">
-                      <strong>{group.bundles}</strong> {group.bundles === 1 ? 'paquete' : 'paquetes'}
-                      <small>{group.profiles} perfiles</small>
+                      <strong>{group.assets}</strong> {group.assets === 1 ? 'activo' : 'activos'}
+                      {group.inactive > 0 ? <small>{group.inactive} inactivos</small> : null}
                     </span>
                   </li>
                 ))}
@@ -482,7 +531,7 @@ export function BulkReadView({
               [
                 ['all', 'Todos', list.length],
                 ['found', 'Registrados', found.length],
-                ['missing', 'No registrados', missing.length],
+                ['missing', 'Desconocidos', missing.length],
               ] as const
             ).map(([value, label, count]) => (
               <button
@@ -512,27 +561,29 @@ export function BulkReadView({
             </span>
           </div>
 
-          {/* One compact line per chip (phones read dozens at a time): chip
-              and reference first; finish, location and reads as detail. */}
+          <Field label="Buscar en los resultados" wide>
+            <input type="search" placeholder="EPC, nombre, categoría o ubicación" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </Field>
+
+          {/* One compact line per unique EPC (phones read dozens at a time). */}
           <ul className="bulk-list">
             {visible.map((chip) => (
-              <li key={chip.epc} className={chip.bundle ? undefined : 'unregistered'}>
+              <li key={chip.epc} className={chip.asset ? undefined : 'unregistered'}>
                 <div className="bulk-item-main">
-                  {chip.bundle ? (
-                    <button type="button" className="epc-link" onClick={() => navigate({ name: 'bundle', id: chip.bundle!.id })}>
+                  {chip.asset ? (
+                    <button type="button" className="epc-link" onClick={() => navigate({ name: 'asset', id: chip.asset!.id })}>
                       {chip.epc}
                     </button>
                   ) : (
                     <span className="mono bulk-epc">{chip.epc}</span>
                   )}
-                  {chip.bundle ? (
+                  {chip.asset ? (
                     <>
                       <span className="bulk-ref">
-                        <strong>{chip.bundle.reference.code}</strong>
-                        {chip.bundle.reference.description ? ` · ${chip.bundle.reference.description}` : ''}
+                        <strong>{chip.asset.name}</strong> <AssetStatus active={chip.asset.active} />
                       </span>
                       <small>
-                        {finishLabel(chip.bundle.finish)} · {bundlePlace(chip.bundle)}
+                        {chip.asset.category ?? 'Sin categoría'} · {chip.asset.location ?? 'Sin ubicación'}
                       </small>
                     </>
                   ) : (
@@ -540,13 +591,12 @@ export function BulkReadView({
                   )}
                 </div>
                 <div className="bulk-item-side">
-                  {chip.bundle ? (
-                    <span className="bulk-qty">
-                      <strong>{chip.bundle.quantity}</strong> perf.
-                    </span>
-                  ) : null}
-                  <small title="Veces que el lector vio este chip">
+                  <small title="Detecciones de este EPC en la sesión">
                     {chip.reads}× {chip.rssi !== null ? `· ${chip.rssi} dBm` : ''}
+                  </small>
+                  <small title="Primera y última detección">
+                    {formatTime(chip.firstSeen)}
+                    {formatTime(chip.lastSeen) !== formatTime(chip.firstSeen) ? ` – ${formatTime(chip.lastSeen)}` : ''}
                   </small>
                 </div>
               </li>
@@ -564,10 +614,10 @@ function ChipStatus({ chip, operator, onRegister }: { chip: Chip; operator: bool
   if (chip.state === 'error') return <span className="badge badge-warning">Sin consultar</span>
   return (
     <span className="bulk-missing">
-      <span className="badge badge-muted">No registrado</span>
+      <span className="badge badge-muted">EPC desconocido</span>
       {operator ? (
         <button type="button" className="text-button" onClick={onRegister}>
-          Registrar
+          Registrar activo
         </button>
       ) : null}
     </span>

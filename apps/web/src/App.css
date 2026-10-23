@@ -2467,7 +2467,7 @@ tr.subrow td:first-child {
 }
 
 /* ==========================================================================
-   Administration (families, references, users)
+   Administration (users)
    ========================================================================== */
 
 .admin-tabs {
@@ -3229,4 +3229,25 @@ tr.subrow td:first-child {
   .bulk-list li {
     padding: 10px 12px;
   }
+}
+
+/* RFID Demo: asset form actions and status badge. */
+.asset-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.badge-success {
+  background: var(--success-bg);
+  color: #006b5c;
+}
+
+.bulk-sim {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.bulk-sim small {
+  color: var(--muted);
 }

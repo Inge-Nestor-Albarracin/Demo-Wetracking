@@ -1,5 +1,60 @@
 # Estado de desarrollo
 
+## RFID Demo: diagnóstico del arranque (23/10/2026)
+
+- Scripts reales de la raíz: `dev:api` y `dev:web`; no existe `dev`.
+  En `apps/api` existe `start:dev`, no `start run:dev`.
+- PowerShell bloqueó `pnpm.ps1` por su política de ejecución. Se verificó
+  `pnpm.cmd` 11.4.0 sin cambiar esa política.
+- `pnpm.cmd --dir apps/api db:check`: conexión autorizada a `rfid_demo`,
+  3 usuarios y 12 activos; consulta sin escrituras.
+- `pnpm.cmd dev:api`: compilación watch con 0 errores; el arranque encontró
+  `EADDRINUSE` en 3001. `pnpm.cmd dev:web`: puerto 5174 ya ocupado.
+  Los servicios existentes respondieron: API `/` con 401 sin sesión
+  (ruta protegida), web `/` con 200. No se probó login ni hardware.
+- Se documentaron comandos y errores en `README-DEMO.md`. Sin cambios de
+  aplicación, dependencias, migraciones o datos; no se usó Git.
+- Contexto: `project-context.md` y `next-task.md` describen el negocio
+  histórico; para esta copia prevalecen README-DEMO y el esquema User/Asset.
+
+## RFID Demo: frontend sin familias, referencias ni paquetes (23/10/2026)
+
+Motivo: el formulario "Registrar paquetes" seguía llamando a `/catalog/...`
+(error "Cannot GET /catalog/references") y el frontend apuntaba al API 3000
+desde el puerto 5173.
+
+- Configuración: el API por defecto es `http://localhost:3001`
+  (`src/api/client.ts`), Vite usa el puerto 5174 (`vite.config.ts`) y
+  `.claude/launch.json` define `api` (3001) y `web` (5174).
+- Nuevas pantallas: `RegisterAssetView` (EPC, nombre, categoría, ubicación y
+  descripción; 409 con enlace al activo existente), `AssetsView` (filtros en
+  backend, totales y paginación), `AssetDetailView` (edición y
+  activar/desactivar solo para ADMIN). `LookupView` usa `/assets/by-epc` y
+  `BulkReadView` usa `/assets/resolve`, con contadores de eventos, EPC únicos,
+  registrados, desconocidos y repeticiones, primera y última detección,
+  búsqueda y modo simulación marcado. El SDK Chafon no se modificó.
+- Eliminados: vistas de paquetes, resumen, detalle de paquete y tareas;
+  componentes de catálogo, ubicación, llegada, operaciones, lista pendiente,
+  tareas, diálogo de salida y administración de familias y referencias; las
+  librerías `forms`, `registrationQueue`, `tasks`, `useNow` y `uuid`.
+  Administración queda solo en Usuarios (ADMIN/OPERATOR).
+- Textos: "RFID Demo" en el login, el título, el encabezado y el inicio. Los
+  logos de WeTracking se conservan.
+
+Verificado: `pnpm build` y `pnpm lint` (web) OK; `pnpm test` (protocolo
+Chafon) 7/7. El bundle compilado no contiene `/catalog`, `/inventory`,
+`/tasks` ni "Solaluminios". En el navegador (5174 → API 3001), con el
+OPERATOR: login OK; registro de "Monitor de prueba web"
+(`D3E0WEB0000000000000001`, escrito en minúsculas y guardado en mayúsculas);
+el mismo EPC devuelve el conflicto con enlace al activo existente; el filtro
+"monitor" muestra 2 activos; la lectura simulada da 11 EPC únicos
+(10 registrados, 1 de ellos inactivo, y 1 desconocido) y 64 eventos con 53
+repeticiones. Ese registro de prueba queda en `rfid_demo`.
+
+No probado: la pistola real por Bluetooth y la vista de ADMIN en el navegador
+(edición, activar/desactivar, usuarios).
+
+
 ## RFID Demo: base rfid_demo, esquema User/Asset y API de activos (22/10/2026)
 
 Copia independiente en `C:\Users\ASUS\Videos\We tracking demo`. El original

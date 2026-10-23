@@ -19,12 +19,12 @@ export function useSession(): SessionValue {
 }
 
 // UI hints only: the API remains the authority on permissions.
-export const canOperate = (role: UserRole | undefined) => role === 'ADMIN' || role === 'WAREHOUSE'
-export const canAdjust = (role: UserRole | undefined) => role === 'ADMIN'
+// Register assets and resolve reads: ADMIN and OPERATOR.
+export const canOperate = (role: UserRole | undefined) => role === 'ADMIN' || role === 'OPERATOR'
+// Edit and activate/deactivate assets: ADMIN only.
+export const canManage = (role: UserRole | undefined) => role === 'ADMIN'
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: 'Administrador',
-  WAREHOUSE: 'Bodega',
-  SALES: 'Ventas',
-  READ_ONLY: 'Solo consulta',
+  OPERATOR: 'Operador',
 }
